@@ -1,0 +1,41 @@
+import { get, patch, post, put } from "./client";
+import type {
+  AdvisorRef, AppNotification, Appointment, AppointmentDetail, LoginResult, Mode, Note, Overview, Policy,
+  Role, Slot, Task, TaskStatus, User, Visibility,
+} from "./types";
+
+export const api = {
+  login: (email: string, password: string, role?: Role) => post<LoginResult>("/auth/login", { email, password, role }),
+  me: () => get<User>("/me"),
+  advisors: (department?: string) => get<{ items: AdvisorRef[] }>("/advisors", { department }),
+
+  slots: (q: { advisor_id?: string; department?: string; status?: string; from_date?: string; to_date?: string } = {}) =>
+    get<{ items: Slot[] }>("/slots", q),
+  createSlot: (b: { starts_at: string; ends_at: string; mode: Mode; location?: string; meeting_url?: string }) =>
+    post<Slot>("/slots", b),
+  cancelSlot: (id: string) => post<Slot>(`/slots/${id}/cancel`),
+
+  book: (slot_id: string, topic: string) => post<Appointment>("/appointments", { slot_id, topic }),
+  appointments: (view: "upcoming" | "past" | "all" = "all") => get<{ items: Appointment[] }>("/appointments", { view }),
+  appointment: (id: string) => get<AppointmentDetail>(`/appointments/${id}`),
+  cancelAppointment: (id: string, reason?: string) => post<Appointment>(`/appointments/${id}/cancel`, { reason }),
+  setStatus: (id: string, status: "completed" | "no_show") => post<Appointment>(`/appointments/${id}/status`, { status }),
+  addNote: (id: string, b: { issues?: string; summary?: string; visibility: Visibility }) =>
+    post<Note>(`/appointments/${id}/notes`, b),
+  patchNote: (id: string, b: { issues?: string; summary?: string; visibility?: Visibility }) =>
+    patch<Note>(`/notes/${id}`, b),
+
+  tasks: () => get<{ items: Task[] }>("/tasks"),
+  addTask: (appointmentId: string, b: { title: string; description?: string; due_date?: string; note_id?: string }) =>
+    post<Task>(`/appointments/${appointmentId}/tasks`, b),
+  setTaskStatus: (id: string, status: TaskStatus) => patch<Task>(`/tasks/${id}`, { status }),
+
+  notifications: () => get<{ items: AppNotification[]; unread: number }>("/notifications"),
+  readAll: () => post<{ marked: number }>("/notifications/read-all"),
+  read: (id: string) => post<AppNotification>(`/notifications/${id}/read`),
+
+  policy: (department?: string) => get<Policy>("/policy", { department }),
+  savePolicy: (p: Policy) => put<Policy>("/admin/policy", p),
+  overview: (department?: string) => get<Overview>("/admin/overview", { department }),
+  sendReminders: () => post<{ created: number }>("/admin/jobs/send-reminders"),
+};

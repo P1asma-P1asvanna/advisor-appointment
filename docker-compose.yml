@@ -1,0 +1,31 @@
+# Local demo: PostgreSQL (schema + demo data loaded on first start) and the API on :8000.
+# Start the web front end separately:  cd frontend && npm install && npm run dev
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: advisor
+      POSTGRES_PASSWORD: advisor
+      POSTGRES_DB: advisor
+    volumes:
+      - ./backend/sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./backend/sql/schema_v2.sql:/docker-entrypoint-initdb.d/02_schema_v2.sql:ro
+      - ./backend/sql/schema_v3.sql:/docker-entrypoint-initdb.d/03_schema_v3.sql:ro
+      - ./backend/sql/seed.sql:/docker-entrypoint-initdb.d/04_seed.sql:ro   # demo data: remove this line in production
+      - dbdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U advisor -d advisor"]
+      interval: 3s
+      retries: 20
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgresql://advisor:advisor@db:5432/advisor
+      CORS_ORIGINS: http://localhost:5173
+    depends_on:
+      db: { condition: service_healthy }
+    ports: ["8000:8000"]
+volumes:
+  dbdata:
