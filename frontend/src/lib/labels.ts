@@ -1,6 +1,6 @@
 import type { AppointmentStatus, Role, SlotStatus, TaskStatus } from "../api/types";
 
-export const ROLE_TH: Record<Role, string> = { student: "นักศึกษา", advisor: "อาจารย์", admin: "เจ้าหน้าที่ภาควิชา" };
+export const ROLE_TH: Record<Role, string> = { student: "นักศึกษา", advisor: "อาจารย์", admin: "เจ้าหน้าที่" };
 
 export const APPT_STATUS: Record<AppointmentStatus, { label: string; tone: string }> = {
   pending: { label: "รอยืนยัน", tone: "amber" },
