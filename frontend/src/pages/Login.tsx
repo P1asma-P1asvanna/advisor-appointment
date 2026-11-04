@@ -6,9 +6,6 @@ import { ROLE_TH } from "../lib/labels";
 import { Tabs } from "../components/ui";
 import { ApiError } from "../api/client";
 
-const DEMO: Record<Role, string> = { student: "thana@example.edu", advisor: "sureeporn@example.edu", admin: "mali@example.edu" };
-// Demo-account buttons appear while developing, or in production only if VITE_SHOW_DEMO=true.
-const SHOW_DEMO = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO === "true";
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -47,14 +44,6 @@ export default function Login() {
         </label>
         {error && <div className="form-error" role="alert">{error}</div>}
         <button className="btn primary block" disabled={busy}>{busy ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}</button>
-        {SHOW_DEMO && (
-          <div className="demo">
-            <span className="muted">บัญชีตัวอย่าง (รหัสผ่าน demo1234)</span>
-            <button type="button" className="btn sm" onClick={() => { setEmail(DEMO[role]); setPassword("demo1234"); }}>
-              ใช้บัญชี{ROLE_TH[role]}ตัวอย่าง
-            </button>
-          </div>
-        )}
       </form>
     </div>
   );
