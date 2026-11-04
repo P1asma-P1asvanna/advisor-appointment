@@ -8,6 +8,8 @@ interface AuthState {
   loading: boolean;
   login(email: string, password: string, role: Role): Promise<User>;
   logout(): void;
+  /** Replace the session, e.g. with the fresh token returned after a password change. */
+  setSession(token: string, user: User): void;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -34,7 +36,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return r.user;
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+  const setSession = useCallback((token: string, u: User) => {
+    tokenStore.set(token);
+    setUser(u);
+  }, []);
+
+  const value = useMemo(() => ({ user, loading, login, logout, setSession }), [user, loading, login, logout, setSession]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

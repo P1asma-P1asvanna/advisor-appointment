@@ -48,8 +48,8 @@ DUMMY_HASH = hash_password("not-a-real-password")
 
 
 def create_token(user_id: UUID, role: str) -> str:
-    now = int(time.time())
-    payload = {"sub": str(user_id), "role": role, "iat": now, "exp": now + config.JWT_TTL_MINUTES * 60}
+    now = time.time()  # fractional, so a token issued right after a password change is newer than the change
+    payload = {"sub": str(user_id), "role": role, "iat": now, "exp": int(now) + config.JWT_TTL_MINUTES * 60}
     return jwt.encode(payload, config.JWT_SECRET, algorithm=config.JWT_ALGORITHM)
 
 

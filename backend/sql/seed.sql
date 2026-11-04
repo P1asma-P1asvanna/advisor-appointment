@@ -2,7 +2,7 @@
 -- Re-runnable: it clears all data first (including booking rules, which go back to the defaults).
 SET timezone = 'Asia/Bangkok';
 
-TRUNCATE notifications, tasks, advising_notes, appointments, availability_slots, users, booking_policies CASCADE;
+TRUNCATE notifications, tasks, advising_notes, appointments, availability_slots, login_attempts, users, booking_policies CASCADE;
 INSERT INTO booking_policies (department) VALUES ('*');
 
 -- ---------- users ----------

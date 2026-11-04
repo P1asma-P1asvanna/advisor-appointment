@@ -7,7 +7,8 @@ import { Tabs } from "../components/ui";
 import { ApiError } from "../api/client";
 
 const DEMO: Record<Role, string> = { student: "thana@example.edu", advisor: "sureeporn@example.edu", admin: "mali@example.edu" };
-const SHOW_DEMO = import.meta.env.VITE_SHOW_DEMO !== "false";
+// Demo-account buttons appear while developing, or in production only if VITE_SHOW_DEMO=true.
+const SHOW_DEMO = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO === "true";
 
 export default function Login() {
   const { user, login } = useAuth();

@@ -146,3 +146,11 @@ th { color: var(--muted); font-weight: 500; font-size: .85rem; } tr:last-child t
   .form-grid .wide { grid-column: auto; }
   .page-head { flex-direction: column; }
 }
+
+/* accounts */
+.notice.warn { background: var(--amber-bg); color: var(--amber); }
+.narrow { max-width: 420px; }
+.secret { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.25rem; letter-spacing: .02em; background: var(--gray-bg); border-radius: 8px; padding: .75rem 1rem; text-align: center; user-select: all; }
+tr.off td { opacity: .55; }
+.filters .tabs { margin-bottom: 0; align-self: end; }
+.usercard .row { margin-top: .5rem; }

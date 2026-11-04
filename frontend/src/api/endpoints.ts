@@ -1,12 +1,21 @@
 import { get, patch, post, put } from "./client";
 import type {
-  AdvisorRef, AppNotification, Appointment, AppointmentDetail, LoginResult, Mode, Note, Overview, Policy,
+  AdvisorRef, AppNotification, Appointment, AppointmentDetail, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
   Role, Slot, Task, TaskStatus, User, Visibility,
 } from "./types";
 
 export const api = {
   login: (email: string, password: string, role?: Role) => post<LoginResult>("/auth/login", { email, password, role }),
   me: () => get<User>("/me"),
+  changePassword: (current_password: string, new_password: string) =>
+    post<LoginResult>("/auth/change-password", { current_password, new_password }),
+
+  users: (q: { role?: Role; q?: string } = {}) => get<{ items: ManagedUser[] }>("/admin/users", q),
+  createUser: (b: { email: string; full_name: string; role: Role; department?: string; password: string }) =>
+    post<ManagedUser>("/admin/users", b),
+  updateUser: (id: string, b: { full_name?: string; department?: string; is_active?: boolean }) =>
+    patch<ManagedUser>(`/admin/users/${id}`, b),
+  resetPassword: (id: string, password: string) => post<{ ok: boolean }>(`/admin/users/${id}/reset-password`, { password }),
   advisors: (department?: string) => get<{ items: AdvisorRef[] }>("/advisors", { department }),
 
   slots: (q: { advisor_id?: string; department?: string; status?: string; from_date?: string; to_date?: string } = {}) =>

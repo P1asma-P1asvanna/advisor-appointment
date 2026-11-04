@@ -43,18 +43,38 @@ npm run dev                      # เว็บที่ http://localhost:5173 (
 |---|---|
 | นักศึกษา | จองนัดหมาย (กรองภาควิชา/อาจารย์, เห็นกติกา) · นัดของฉัน (ยกเลิกพร้อมเหตุผล) · รายละเอียดนัด (บันทึกที่แชร์ + งาน) · งานติดตาม (กระดาน 3 คอลัมน์) · การแจ้งเตือน |
 | อาจารย์ | เวลาว่างของฉัน (เปิด/ปิดช่อง) · นัดหมาย (เสร็จสิ้น/ไม่มา/ยกเลิก) · รายละเอียดนัด (บันทึกประเด็น แชร์/ส่วนตัว, มอบงาน) · งานที่มอบหมาย · การแจ้งเตือน |
-| เจ้าหน้าที่ | ภาพรวมภาควิชา (KPI, รายอาจารย์, นักศึกษาที่ควรติดตาม, รันแจ้งเตือน) · กติกาการจอง |
+| เจ้าหน้าที่ | ภาพรวมภาควิชา (KPI, รายอาจารย์, นักศึกษาที่ควรติดตาม, รันแจ้งเตือน) · **จัดการผู้ใช้** (เพิ่ม, ปิด/เปิดบัญชี, รีเซ็ตรหัสผ่าน) · กติกาการจอง |
+| ทุกบทบาท | **บัญชีของฉัน** (เปลี่ยนรหัสผ่าน) บัญชีใหม่หรือถูกรีเซ็ตจะถูกบังคับให้ตั้งรหัสผ่านใหม่ก่อนใช้งาน |
 
 ทุกข้อความ error ที่แสดงมาจาก API โดยตรง (ภาษาไทย) เช่น "ช่องถูกจองไปแล้ว" แล้วหน้าจะรีเฟรชรายการให้เอง
 
-## ตั้งค่าตอน deploy
+## Deploy (Neon + Render + Vercel)
 
-- **Frontend**: `npm run build` ได้โฟลเดอร์ `frontend/dist` (โฮสต์แบบ static ได้ เช่น Netlify/Vercel/Cloudflare Pages) ตั้ง `VITE_API_URL` เป็นที่อยู่ API แล้วตั้ง `VITE_SHOW_DEMO=false`
-  ต้องตั้ง rewrite ให้ทุกเส้นทางชี้ไป `index.html` (SPA)
-- **Backend**: ตั้ง `JWT_SECRET` (สุ่ม 32+ ตัวอักษร), `DATABASE_URL`, `CORS_ORIGINS` เป็น origin ของเว็บ และอย่าตั้ง `APP_ENV=dev`; ลบ `seed.sql` ออกจากการ init
-- ตั้ง scheduler เรียก `POST /api/v1/admin/jobs/send-reminders` (หรือ `SELECT send_reminders();`) ทุกชั่วโมง
+| ส่วน | บริการ | ค่าที่ต้องตั้ง |
+|---|---|---|
+| ฐานข้อมูล | Neon (connection string แบบ **ไม่ใช่ pooled**) | รัน `backend/sql/schema*.sql` ตามลำดับ |
+| API | Render, Root Directory `backend` | `DATABASE_URL`, `JWT_SECRET` (สุ่ม 32+ ตัวอักษร), `CORS_ORIGINS` (ที่อยู่เว็บ ไม่มี `/` ท้าย), Health Check `/health`, อย่าตั้ง `APP_ENV=dev` |
+| เว็บ | Vercel, Root Directory `frontend` | `VITE_API_URL` (ที่อยู่ API ไม่มี `/` ท้าย) ไฟล์ `frontend/vercel.json` ทำให้ทุกเส้นทางชี้ไป `index.html` |
+
+ตั้ง scheduler เรียก `POST /api/v1/admin/jobs/send-reminders` (หรือ `SELECT send_reminders();`) ทุกชั่วโมงถ้าต้องการแจ้งเตือนอัตโนมัติ
+
+### อัปเกรดระบบที่ขึ้นแล้วเป็นรุ่นมีระบบผู้ใช้ (schema_v4)
+ลำดับสำคัญ เพื่อไม่ให้ระบบที่ใช้งานอยู่พัง
+1. Neon SQL Editor: รัน `backend/sql/schema_v4.sql` ก่อน (รันซ้ำได้ ไม่กระทบข้อมูลเดิม)
+2. Render: เพิ่ม `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` (8+ ตัว), `BOOTSTRAP_ADMIN_NAME`
+3. push โค้ดขึ้น GitHub ให้ Render และ Vercel deploy ใหม่
+4. เมื่อพร้อมใช้งานจริง: Neon SQL Editor รัน `backend/sql/clear_demo_data.sql` (**ลบข้อมูลตัวอย่างทั้งหมด**) แล้วที่ Render กด Manual Deploy → Restart เพื่อให้ระบบสร้างเจ้าหน้าที่คนแรกจากข้อ 2
+5. ล็อกอินด้วยบัญชีนั้น ตั้งรหัสผ่านใหม่ แล้วที่ Render ลบตัวแปร `BOOTSTRAP_ADMIN_PASSWORD` ออก
+6. Vercel: ลบหรือตั้ง `VITE_SHOW_DEMO` เป็น `false` แล้ว Redeploy (ซ่อนปุ่มบัญชีตัวอย่าง)
+
+### ใช้ชื่อโดเมนของตัวเอง
+1. ซื้อโดเมนจากผู้ให้บริการใดก็ได้
+2. Vercel → โปรเจกต์ → Settings → Domains → Add แล้วตั้งค่า DNS ที่ผู้ให้บริการโดเมนตามที่ Vercel แสดง (ปกติเป็น A หรือ CNAME) รอจนขึ้น Valid Configuration
+3. Render → Environment: เพิ่มโดเมนใหม่ใน `CORS_ORIGINS` คั่นด้วยจุลภาค เช่น `https://app.example.edu,https://advisor-appointment.vercel.app`
+4. (ไม่บังคับ) โดเมนให้ API ด้วย: Render → Settings → Custom Domains แล้วเปลี่ยน `VITE_API_URL` ที่ Vercel เป็นที่อยู่ใหม่ และ Redeploy
 
 ## สถานะการตรวจสอบ (ตรงไปตรงมา)
 
-- Backend: เทสต์ 44 ข้อผ่านบน PostgreSQL 16 จริง แต่รันกับตัวจำลอง FastAPI/psycopg เพราะสภาพแวดล้อมที่พัฒนาติดตั้ง PyPI ไม่ได้ → ให้ดู CI ว่าเขียวกับไลบรารีจริง
-- Frontend: ตรวจ syntax ของทุกไฟล์ และตรวจชนิดข้อมูลของชั้น `api/` กับ `lib/` แล้ว แต่ **ยังไม่เคยรัน `npm install`/`npm run build` หรือเปิดในเบราว์เซอร์** (npm ถูกบล็อก) หน้า React จึงยังไม่ผ่านการ type-check เต็มรูปแบบ — รัน `npm run build` ก่อนใช้งาน ถ้ามี error ส่งมาแก้ได้ทันที
+- Backend: เทสต์ 62 ข้อผ่านบน PostgreSQL 16 จริง ส่วนที่ผูกกับ FastAPI/psycopg จริงตรวจผ่าน CI และใช้งานจริงบน Render แล้ว
+- Frontend: build ผ่านบนเครื่องผู้ใช้ และเปิดใช้งานจริงบน Vercel แล้ว หน้าที่เพิ่มใหม่ (จัดการผู้ใช้, บัญชีของฉัน) ตรวจ syntax แล้ว แต่ต้อง build และลองกดใช้งานบนเครื่องจริงก่อน
+- ข้อจำกัด: ยังไม่มีนำเข้าผู้ใช้เป็นกลุ่ม (CSV), ลืมรหัสผ่านด้วยตัวเอง, และแจ้งเตือนทางอีเมล/LINE

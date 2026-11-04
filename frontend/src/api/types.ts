@@ -6,6 +6,18 @@ export interface User {
   full_name: string;
   role: Role;
   department: string | null;
+  must_change_password: boolean;
+}
+
+export interface ManagedUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: Role;
+  department: string | null;
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string;
 }
 
 export interface LoginResult {

@@ -99,3 +99,52 @@ class PolicyIn(BaseModel):
     cancel_before_hours: int = Field(ge=0, le=720)
     max_active_per_student: int = Field(ge=1, le=20)
     reminder_hours_before: int = Field(ge=1, le=168)
+
+
+Password = Annotated[str, StringConstraints(min_length=8, max_length=200)]
+Name120 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+Dept120 = Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)]
+
+
+class UserIn(BaseModel):
+    email: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
+    full_name: Name120
+    role: Literal["student", "advisor", "admin"]
+    department: Optional[Dept120] = None
+    password: Password
+
+    @model_validator(mode="after")
+    def _department(self):
+        self.department = (self.department or "").strip() or None
+        if self.role in ("student", "advisor") and not self.department:
+            raise ValueError("department is required for students and advisors")
+        return self
+
+
+class UserPatch(BaseModel):
+    """The role cannot be changed: create a new account instead, so history stays attached to the right person."""
+
+    full_name: Optional[Name120] = None
+    department: Optional[Dept120] = None
+    is_active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _something(self):
+        if self.full_name is None and self.department is None and self.is_active is None:
+            raise ValueError("nothing to update")
+        return self
+
+
+class ResetPasswordIn(BaseModel):
+    password: Password
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    new_password: Password
+
+    @model_validator(mode="after")
+    def _different(self):
+        if self.new_password == self.current_password:
+            raise ValueError("the new password must be different")
+        return self

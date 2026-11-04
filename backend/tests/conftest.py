@@ -34,7 +34,7 @@ def _schema():
     name = urlparse(TEST_DB).path.lstrip("/")
     assert name.endswith("_test"), f"refusing to wipe database {name!r}: its name must end with _test"
     _run_script("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-    for f in ("schema.sql", "schema_v2.sql", "schema_v3.sql"):
+    for f in ("schema.sql", "schema_v2.sql", "schema_v3.sql", "schema_v4.sql"):
         _run_script((SQL_DIR / f).read_text(encoding="utf-8"))
 
 

@@ -8,7 +8,7 @@ import { ROLE_TH } from "../lib/labels";
 const NAV: Record<Role, [string, string][]> = {
   student: [["/book", "จองนัดหมาย"], ["/appointments", "นัดของฉัน"], ["/tasks", "งานติดตาม"], ["/notifications", "การแจ้งเตือน"]],
   advisor: [["/slots", "เวลาว่างของฉัน"], ["/appointments", "นัดหมาย"], ["/tasks", "งานที่มอบหมาย"], ["/notifications", "การแจ้งเตือน"]],
-  admin: [["/overview", "ภาพรวมภาควิชา"], ["/policy", "กติกาการจอง"], ["/notifications", "การแจ้งเตือน"]],
+  admin: [["/overview", "ภาพรวมภาควิชา"], ["/users", "จัดการผู้ใช้"], ["/policy", "กติกาการจอง"], ["/notifications", "การแจ้งเตือน"]],
 };
 
 export default function Layout() {
@@ -43,7 +43,10 @@ export default function Layout() {
         <div className="usercard">
           <strong>{user.full_name}</strong>
           <span className="muted">{ROLE_TH[user.role]}{user.department ? " · " + user.department : ""}</span>
-          <button className="btn sm" onClick={logout}>ออกจากระบบ</button>
+          <div className="row wrap">
+            <NavLink className="btn sm" to="/account">บัญชีของฉัน</NavLink>
+            <button className="btn sm" onClick={logout}>ออกจากระบบ</button>
+          </div>
         </div>
       </aside>
       <main className="main"><Outlet /></main>

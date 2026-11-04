@@ -11,7 +11,8 @@ services:
       - ./backend/sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./backend/sql/schema_v2.sql:/docker-entrypoint-initdb.d/02_schema_v2.sql:ro
       - ./backend/sql/schema_v3.sql:/docker-entrypoint-initdb.d/03_schema_v3.sql:ro
-      - ./backend/sql/seed.sql:/docker-entrypoint-initdb.d/04_seed.sql:ro   # demo data: remove this line in production
+      - ./backend/sql/schema_v4.sql:/docker-entrypoint-initdb.d/04_schema_v4.sql:ro
+      - ./backend/sql/seed.sql:/docker-entrypoint-initdb.d/05_seed.sql:ro   # demo data: remove this line in production
       - dbdata:/var/lib/postgresql/data
     ports: ["5432:5432"]
     healthcheck:

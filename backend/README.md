@@ -13,7 +13,7 @@ API สำหรับระบบนัดหมายอาจารย์/ภ
 pip install -r requirements.txt
 createdb advisor
 export DATABASE_URL=postgresql://localhost/advisor APP_ENV=dev
-./scripts/init_db.sh --seed          # schema.sql -> schema_v2.sql -> schema_v3.sql -> seed.sql (ข้อมูลตัวอย่าง)
+./scripts/init_db.sh --seed          # schema.sql -> schema_v2.sql -> schema_v3.sql -> schema_v4.sql -> seed.sql (ข้อมูลตัวอย่าง)
 uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 ```
 
@@ -34,6 +34,8 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `DB_TIMEZONE` | เขตเวลาของ connection ค่าเริ่มต้น `Asia/Bangkok` (เวลาใน JSON จะมี offset +07:00) |
 | `CORS_ORIGINS` | ต้นทางของหน้าเว็บ คั่นด้วยจุลภาค เช่น `https://app.example.edu` |
 | `DB_POOL_MAX` | จำนวน connection สูงสุดใน pool ค่าเริ่มต้น 10 |
+| `LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_MINUTES` | ใส่รหัสผิดได้กี่ครั้งต่ออีเมลในกี่นาทีก่อนถูกล็อกชั่วคราว ค่าเริ่มต้น 5 ครั้ง / 15 นาที |
+| `BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` / `_NAME` | สร้างเจ้าหน้าที่คนแรกตอนเริ่มระบบ **เฉพาะเมื่อยังไม่มี admin เลย** (รหัสผ่านอย่างน้อย 8 ตัว ต้องเปลี่ยนตอนล็อกอินครั้งแรก) ตั้งเสร็จแล้วควรลบตัวแปรรหัสผ่านออก |
 
 ## การยืนยันตัวตนและรูปแบบ error
 
@@ -48,6 +50,12 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 |---|---|---|
 | `not_authenticated` / `invalid_token` | 401 | ไม่มี token หรือ token หมดอายุ/ไม่ถูกต้อง |
 | `forbidden` | 403 | บทบาทไม่มีสิทธิ์ทำรายการนี้ |
+| `password_change_required` | 403 | บัญชีใหม่/ถูกรีเซ็ตต้องตั้งรหัสผ่านใหม่ก่อน (ใช้ได้แค่ `/me` และ `/auth/change-password`) |
+| `account_disabled` | 403 | บัญชีถูกปิดการใช้งาน |
+| `wrong_password` | 403 | รหัสผ่านปัจจุบันไม่ถูกต้อง (ตอนเปลี่ยนรหัสผ่าน) |
+| `too_many_attempts` | 429 | ใส่รหัสผิดเกินกำหนด ล็อกอีเมลนั้นชั่วคราว (`details.retry_after_minutes`) |
+| `email_taken` | 409 | อีเมลนี้มีบัญชีอยู่แล้ว |
+| `cannot_modify_self` | 409 | แอดมินปิดบัญชี/รีเซ็ตรหัสผ่านของตัวเองไม่ได้ |
 | `*_not_found` | 404 | ไม่พบ หรือไม่ใช่ของคุณ (ไม่บอกว่ามีอยู่จริง) |
 | `slot_unavailable` | 409 | ช่องถูกจองไปแล้วหรือไม่เปิดให้จอง |
 | `too_late_to_book` | 409 | จองล่วงหน้าไม่ถึงที่กติกากำหนด |
@@ -88,6 +96,11 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `PUT` | `/api/v1/admin/policy` | เจ้าหน้าที่ | บันทึกกติกา |
 | `GET` | `/api/v1/admin/overview` | เจ้าหน้าที่ | ภาพรวมภาควิชา |
 | `POST` | `/api/v1/admin/jobs/send-reminders` | เจ้าหน้าที่ | รันงานแจ้งเตือนตอนนี้ |
+| `POST` | `/api/v1/auth/change-password` | ผู้ที่ login | บัญชีของฉัน: เปลี่ยนรหัสผ่าน (ได้ token ใหม่กลับมา) |
+| `GET` | `/api/v1/admin/users` | เจ้าหน้าที่ | รายชื่อผู้ใช้ (กรองบทบาท/ค้นหา) |
+| `POST` | `/api/v1/admin/users` | เจ้าหน้าที่ | เพิ่มผู้ใช้พร้อมรหัสผ่านชั่วคราว |
+| `PATCH` | `/api/v1/admin/users/{user_id}` | เจ้าหน้าที่ | แก้ชื่อ/ภาควิชา, ปิดหรือเปิดบัญชี |
+| `POST` | `/api/v1/admin/users/{user_id}/reset-password` | เจ้าหน้าที่ | รีเซ็ตรหัสผ่านเป็นรหัสชั่วคราว |
 
 พฤติกรรมที่ควรรู้
 - **`GET /slots`** นักศึกษาเห็นเฉพาะช่องที่ว่างและยังไม่ถึงเวลา อาจารย์เห็นเฉพาะของตัวเอง เจ้าหน้าที่เห็นทั้งหมด กรองด้วย `advisor_id`, `department`, `status`, `from_date`, `to_date`
@@ -107,14 +120,22 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 - ตรวจว่าผู้จองเป็นนักศึกษาจริง และกันนัดซ้อนเวลาของนักศึกษาคนเดียวกัน
 - `cancel_appointment()` ตรวจว่าผู้ยกเลิกเป็นนักศึกษาหรืออาจารย์ของนัดนั้นจริง (ก่อนหน้านี้ฟังก์ชันเชื่อ user id ที่ส่งมาโดยไม่ตรวจ)
 
-เพิ่มผู้ใช้เอง: สร้าง hash ด้วย `python -m app.security 'รหัสผ่าน'` แล้วใส่ในคอลัมน์ `password_hash` (รูปแบบ scrypt จาก standard library ไม่ต้องติดตั้งเพิ่ม)
+`schema_v4.sql` (สำหรับใช้งานจริง) เพิ่ม
+- `users.is_active`, `must_change_password`, `password_changed_at` และตาราง `login_attempts`
+- การปิดบัญชีไม่ลบข้อมูล: ประวัตินัดยังอยู่ และถ้าเป็นอาจารย์ ช่องเวลาว่างที่ยังไม่ถูกจองจะถูกปิดให้อัตโนมัติ (นัดที่จองไปแล้วคงเดิม)
+- เปลี่ยนหรือรีเซ็ตรหัสผ่านแล้ว token เก่าทุกอันใช้ไม่ได้ทันที
+- ล็อกอินผิดเกินกำหนดจะล็อกอีเมลนั้นชั่วคราว (นับทั้งอีเมลที่ไม่มีในระบบ เพื่อไม่บอกว่ามีบัญชีหรือไม่) ข้อแลกเปลี่ยนคือคนอื่นอาจตั้งใจใส่รหัสผิดเพื่อล็อกบัญชีเราได้ชั่วคราว แอดมินปลดล็อกได้ด้วยการรีเซ็ตรหัสผ่าน
+
+`sql/clear_demo_data.sql` ล้างข้อมูลตัวอย่างทั้งหมด (ผู้ใช้ นัด บันทึก งาน แจ้งเตือน) แล้วคืนกติกาเป็นค่าเริ่มต้น ใช้ครั้งเดียวก่อนให้ผู้ใช้จริงเข้า
+
+เพิ่มผู้ใช้: ใช้หน้า "จัดการผู้ใช้" ของเจ้าหน้าที่ (หรือ `POST /admin/users`) ส่วนเจ้าหน้าที่คนแรกใช้ `BOOTSTRAP_ADMIN_*` ถ้าจำเป็นต้องสร้างด้วยมือ ให้สร้าง hash ด้วย `python -m app.security 'รหัสผ่าน'` แล้วใส่ในคอลัมน์ `password_hash` (รูปแบบ scrypt จาก standard library ไม่ต้องติดตั้งเพิ่ม)
 
 ## ทดสอบ
 
 ```bash
-pytest                                                    # 11 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
+pytest                                                    # 13 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
 createdb advisor_test
-TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 33 ข้อ HTTP-level
+TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 49 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
 ```
 
 ชื่อฐานข้อมูลทดสอบต้องลงท้ายด้วย `_test` ชุดทดสอบจะล้างและสร้างตารางใหม่ทุกครั้ง และโหลด `seed.sql` ก่อนทุกเทสต์
@@ -123,10 +144,10 @@ TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 33 ข้อ HT
 
 ตรวจแล้ว (รันจริง):
 - `schema_v3.sql` และฟังก์ชันทั้งหมดบน PostgreSQL 16 รวมถึงการจองพร้อมกันสองเซสชัน
-- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 44 ข้อ (ลำดับปกติและลำดับย้อนกลับ)
+- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 62 ข้อ
+- `schema_v4.sql` ใช้ซ้ำได้ (idempotent) และลองใช้ทับฐานข้อมูลที่มีข้อมูลตัวอย่างอยู่แล้ว แล้วรัน `clear_demo_data.sql` ตามด้วย
 
-ยังไม่ได้ตรวจ: ผมรันบนเครื่องที่ติดตั้งแพ็กเกจจาก PyPI ไม่ได้ จึงใช้ตัวจำลอง FastAPI และ psycopg แบบบางที่เขียนเฉพาะสำหรับทดสอบ (ไม่รวมอยู่ในโปรเจกต์นี้)
-ดังนั้นส่วนที่ยังไม่เคยรันกับของจริงคือการผูกเส้นทางและ dependency ของ FastAPI, การสร้างหน้า `/docs`, และพฤติกรรมของ `psycopg_pool`
-เทสต์ชุดเดียวกันนี้เขียนเป็นระดับ HTTP จึงรันกับ FastAPI จริงได้ทันที รัน `pytest` เป็นอย่างแรกบนเครื่องคุณ ถ้ามีข้อไหนล้ม จุดที่น่าสงสัยก่อนคือ `app/db.py` และ `app/main.py`
+ส่วนที่ผูกกับ FastAPI/psycopg จริง (routing, dependency, pool) ตรวจผ่าน CI บน GitHub และใช้งานจริงบน Render แล้วสำหรับ endpoint ชุดแรก
+ชุด `schema_v4` และ endpoint จัดการผู้ใช้ผ่านเทสต์กับตัวจำลองในเครื่องผู้พัฒนา ให้ดู CI ว่าเขียวกับไลบรารีจริงหลัง push
 
-ข้อจำกัดของ MVP: ยังไม่มี rate limit ที่หน้า login, ไม่มี endpoint จัดการผู้ใช้ (เพิ่มผ่าน SQL), และไม่มีการส่งอีเมล/LINE (การแจ้งเตือนเข้ากล่องในระบบ)
+ข้อจำกัดของ MVP: ยังไม่มีการนำเข้าผู้ใช้เป็นกลุ่ม (CSV), ไม่มีการลืมรหัสผ่านด้วยตัวเอง (ต้องให้เจ้าหน้าที่รีเซ็ต) และไม่มีการส่งอีเมล/LINE (การแจ้งเตือนเข้ากล่องในระบบ)

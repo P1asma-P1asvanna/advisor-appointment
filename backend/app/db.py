@@ -38,6 +38,13 @@ def close_pool() -> None:
         _pool = None
 
 
+def connection():
+    """A pooled connection for code that runs outside a request (start-up jobs)."""
+    if _pool is None:
+        raise RuntimeError("database pool is not open")
+    return _pool.connection()
+
+
 def get_conn() -> Iterator[Any]:
     """FastAPI dependency: one pooled connection per request."""
     if _pool is None:

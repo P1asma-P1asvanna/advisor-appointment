@@ -4,10 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import config
-from .db import close_pool, get_conn, one, open_pool
+from . import bootstrap, config
+from .db import close_pool, connection, get_conn, open_pool, one
 from .errors import install_handlers
-from .routers import admin, appointments, auth, notes, notifications, slots, tasks
+from .routers import admin, appointments, auth, notes, notifications, slots, tasks, users
 
 
 @asynccontextmanager
@@ -15,6 +15,8 @@ async def lifespan(app: FastAPI):
     config.validate()
     open_pool()
     try:
+        with connection() as conn:
+            bootstrap.ensure_admin(conn)
         yield
     finally:
         close_pool()
@@ -22,7 +24,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Advisor Appointment API",
-    version="1.0.0",
+    version="1.1.0",
     description="Open availability, book appointments, record advising notes and follow up on tasks.",
     lifespan=lifespan,
 )
@@ -45,6 +47,6 @@ def health(conn=Depends(get_conn)):
 
 
 api = APIRouter(prefix="/api/v1")
-for module in (auth, slots, appointments, notes, tasks, notifications, admin):
+for module in (auth, slots, appointments, notes, tasks, notifications, admin, users):
     api.include_router(module.router)
 app.include_router(api)

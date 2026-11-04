@@ -99,3 +99,30 @@ def test_policy_bounds():
     PolicyIn(min_notice_hours=0, cancel_before_hours=0, max_active_per_student=1, reminder_hours_before=1)
     with pytest.raises(ValueError):
         PolicyIn(min_notice_hours=0, cancel_before_hours=0, max_active_per_student=0, reminder_hours_before=1)
+
+
+def test_user_input_rules():
+    from app.schemas import ChangePasswordIn, UserIn
+
+    ok = UserIn(email=" Someone@Example.EDU ", full_name="ชื่อ", role="student", department="วิศวกรรมคอมพิวเตอร์", password="12345678")
+    assert ok.email == "someone@example.edu"
+    assert UserIn(email="a@b.co", full_name="ผู้ดูแล", role="admin", password="12345678", department="  ").department is None
+    for bad in (
+        dict(role="advisor", department=None),                  # needs a department
+        dict(role="student", department="x", password="short"),
+        dict(role="student", department="x", email="no-at-sign"),
+        dict(role="hacker", department="x"),
+    ):
+        base = dict(email="a@b.co", full_name="x", role="student", department="x", password="12345678")
+        with pytest.raises(ValueError):
+            UserIn(**{**base, **bad})
+    with pytest.raises(ValueError):
+        ChangePasswordIn(current_password="same-pass-1", new_password="same-pass-1")
+
+
+def test_token_issued_after_a_moment_is_newer_than_it():
+    import time as _t
+
+    before = _t.time()
+    claims = decode_token(create_token(uuid4(), "student"))
+    assert claims["iat"] >= before

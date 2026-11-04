@@ -46,6 +46,8 @@ def map_db_error(exc: Any) -> ApiError | None:
         if constraint == "uq_active_appointment_per_slot":
             status, text = RULES["slot_unavailable"]
             return ApiError(status, "slot_unavailable", text)
+        if constraint == "users_email_key":
+            return ApiError(409, "email_taken", "อีเมลนี้ถูกใช้แล้ว")
         return ApiError(409, "already_exists", "มีข้อมูลนี้อยู่แล้ว")
     if sqlstate == "23P01":
         return ApiError(409, "slot_overlaps", "ช่วงเวลานี้ทับกับช่องที่เปิดไว้แล้ว")

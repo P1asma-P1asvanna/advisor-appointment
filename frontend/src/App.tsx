@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { homeFor, useAuth } from "./auth/AuthContext";
 import type { Role } from "./api/types";
 import Layout from "./components/Layout";
@@ -13,10 +13,15 @@ import TasksPage from "./pages/shared/TasksPage";
 import NotificationsPage from "./pages/shared/NotificationsPage";
 import OverviewPage from "./pages/admin/OverviewPage";
 import PolicyPage from "./pages/admin/PolicyPage";
+import UsersPage from "./pages/admin/UsersPage";
+import AccountPage from "./pages/shared/AccountPage";
 
 function Guard({ roles, children }: { roles?: Role[]; children: ReactNode }) {
   const { user } = useAuth();
+  const { pathname } = useLocation();
   if (!user) return <Navigate to="/login" replace />;
+  // A new or reset account may only change its password until it has done so (the API enforces this too).
+  if (user.must_change_password && pathname !== "/account") return <Navigate to="/account" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={homeFor(user.role)} replace />;
   return <>{children}</>;
 }
@@ -40,6 +45,8 @@ export default function App() {
         <Route path="/tasks" element={<Guard roles={["student", "advisor"]}><TasksPage /></Guard>} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/overview" element={<Guard roles={["admin"]}><OverviewPage /></Guard>} />
+        <Route path="/users" element={<Guard roles={["admin"]}><UsersPage /></Guard>} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="/policy" element={<Guard roles={["admin"]}><PolicyPage /></Guard>} />
       </Route>
       <Route path="*" element={<Home />} />
