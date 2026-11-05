@@ -27,24 +27,25 @@ export default function Layout() {
   }, []);
 
   if (!user) return null;
+  const locked = user.must_change_password; // only the password page is usable until it is changed
   return (
     <div className="shell">
-      <button className="burger" onClick={() => setOpen(!open)} aria-label="เมนู">☰</button>
-      <aside className={"side" + (open ? " open" : "")} onClick={() => setOpen(false)}>
+      {!locked && <button className="burger" onClick={() => setOpen(!open)} aria-label="เมนู">☰</button>}
+      <aside className={"side" + (open ? " open" : "") + (locked ? " locked" : "")} onClick={() => setOpen(false)}>
         <div className="brand"><span className="logo" aria-hidden>▤</span> นัดหมายอาจารย์</div>
-        <nav>
+        {!locked && <nav>
           {NAV[user.role].map(([to, label]) => (
             <NavLink key={to} to={to} className={({ isActive }) => (isActive ? "on" : "")}>
               {label}
               {to === "/notifications" && unread > 0 && <span className="count">{unread}</span>}
             </NavLink>
           ))}
-        </nav>
+        </nav>}
         <div className="usercard">
           <strong>{user.full_name}</strong>
           <span className="muted">{ROLE_TH[user.role]}{user.department ? " · " + user.department : ""}</span>
           <div className="row wrap">
-            <NavLink className="btn sm" to="/account">บัญชีของฉัน</NavLink>
+            {!locked && <NavLink className="btn sm" to="/account">บัญชีของฉัน</NavLink>}
             <button className="btn sm" onClick={logout}>ออกจากระบบ</button>
           </div>
         </div>

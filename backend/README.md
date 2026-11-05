@@ -81,6 +81,8 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `POST` | `/api/v1/slots/{slot_id}/cancel` | อาจารย์ | ปิดช่องนี้ |
 | `POST` | `/api/v1/appointments` | นักศึกษา | ยืนยันการจอง |
 | `GET` | `/api/v1/appointments` | นักศึกษา, อาจารย์ | รายการนัด / นัดของฉัน |
+| `GET` | `/api/v1/appointments/calendar.ics` | นักศึกษา, อาจารย์ | ไฟล์ปฏิทิน (.ics) ของนัดที่กำลังจะมาถึงทั้งหมด |
+| `GET` | `/api/v1/appointments/{appointment_id}/calendar.ics` | ผู้ร่วมนัด | ไฟล์ปฏิทินของนัดเดียว |
 | `GET` | `/api/v1/appointments/{appointment_id}` | ผู้ร่วมนัด | หน้ารายละเอียดนัด |
 | `POST` | `/api/v1/appointments/{appointment_id}/cancel` | ผู้ร่วมนัด | ยกเลิกนัด |
 | `POST` | `/api/v1/appointments/{appointment_id}/status` | อาจารย์ | ปรึกษาเสร็จสิ้น / ไม่มาตามนัด |
@@ -99,7 +101,6 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `POST` | `/api/v1/auth/change-password` | ผู้ที่ login | บัญชีของฉัน: เปลี่ยนรหัสผ่าน (ได้ token ใหม่กลับมา) |
 | `GET` | `/api/v1/admin/users` | เจ้าหน้าที่ | รายชื่อผู้ใช้ (กรองบทบาท/ค้นหา) |
 | `POST` | `/api/v1/admin/users` | เจ้าหน้าที่ | เพิ่มผู้ใช้พร้อมรหัสผ่านชั่วคราว |
-| `POST` | `/api/v1/admin/users/import` | เจ้าหน้าที่ | นำเข้าผู้ใช้หลายคน (`dry_run` ตรวจก่อน, สูงสุด 300 แถว) |
 | `PATCH` | `/api/v1/admin/users/{user_id}` | เจ้าหน้าที่ | แก้ชื่อ/ภาควิชา, ปิดหรือเปิดบัญชี |
 | `POST` | `/api/v1/admin/users/{user_id}/reset-password` | เจ้าหน้าที่ | รีเซ็ตรหัสผ่านเป็นรหัสชั่วคราว |
 
@@ -129,14 +130,14 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 
 `sql/clear_demo_data.sql` ล้างข้อมูลตัวอย่างทั้งหมด (ผู้ใช้ นัด บันทึก งาน แจ้งเตือน) แล้วคืนกติกาเป็นค่าเริ่มต้น ใช้ครั้งเดียวก่อนให้ผู้ใช้จริงเข้า
 
-เพิ่มผู้ใช้: ใช้หน้า "จัดการผู้ใช้" ของเจ้าหน้าที่ (`POST /admin/users` ทีละคน หรือ `POST /admin/users/import` หลายคนจากไฟล์ CSV: ตรวจทีละแถว ข้ามแถวที่ผิด สุ่มรหัสชั่วคราวให้แถวที่ไม่มีรหัส และคืนรหัสกลับมาครั้งเดียว) ส่วนเจ้าหน้าที่คนแรกใช้ `BOOTSTRAP_ADMIN_*` ถ้าจำเป็นต้องสร้างด้วยมือ ให้สร้าง hash ด้วย `python -m app.security 'รหัสผ่าน'` แล้วใส่ในคอลัมน์ `password_hash` (รูปแบบ scrypt จาก standard library ไม่ต้องติดตั้งเพิ่ม)
+เพิ่มผู้ใช้: ใช้หน้า "จัดการผู้ใช้" ของเจ้าหน้าที่ (หรือ `POST /admin/users`) ส่วนเจ้าหน้าที่คนแรกใช้ `BOOTSTRAP_ADMIN_*` ถ้าจำเป็นต้องสร้างด้วยมือ ให้สร้าง hash ด้วย `python -m app.security 'รหัสผ่าน'` แล้วใส่ในคอลัมน์ `password_hash` (รูปแบบ scrypt จาก standard library ไม่ต้องติดตั้งเพิ่ม)
 
 ## ทดสอบ
 
 ```bash
 pytest                                                    # 14 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
 createdb advisor_test
-TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 53 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
+TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 51 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
 ```
 
 ชื่อฐานข้อมูลทดสอบต้องลงท้ายด้วย `_test` ชุดทดสอบจะล้างและสร้างตารางใหม่ทุกครั้ง และโหลด `seed.sql` ก่อนทุกเทสต์
@@ -145,7 +146,7 @@ TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 53 ข้อ HT
 
 ตรวจแล้ว (รันจริง):
 - `schema_v3.sql` และฟังก์ชันทั้งหมดบน PostgreSQL 16 รวมถึงการจองพร้อมกันสองเซสชัน
-- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 67 ข้อ
+- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 65 ข้อ
 - `schema_v4.sql` ใช้ซ้ำได้ (idempotent) และลองใช้ทับฐานข้อมูลที่มีข้อมูลตัวอย่างอยู่แล้ว แล้วรัน `clear_demo_data.sql` ตามด้วย
 
 ส่วนที่ผูกกับ FastAPI/psycopg จริง (routing, dependency, pool) ตรวจผ่าน CI บน GitHub และใช้งานจริงบน Render แล้วสำหรับ endpoint ชุดแรก

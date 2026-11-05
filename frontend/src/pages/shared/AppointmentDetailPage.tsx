@@ -5,6 +5,7 @@ import type { AppointmentDetail, AppointmentTask, Note, TaskStatus, Visibility }
 import { useAuth } from "../../auth/AuthContext";
 import { ApptBadge, Badge, Empty, ErrorBox, Loading, PageHeader, Where } from "../../components/ui";
 import { useToast } from "../../components/Toast";
+import { googleCalendarUrl } from "../../lib/calendar";
 import { dateTime, dayLabel, dueLabel, range } from "../../lib/format";
 import { useLoad } from "../../lib/hooks";
 import { TASK_STATUS } from "../../lib/labels";
@@ -13,6 +14,7 @@ export default function AppointmentDetailPage() {
   const { id = "" } = useParams();
   const { user } = useAuth();
   const q = useLoad(() => api.appointment(id), [id]);
+  const toast = useToast();
   const isAdvisor = user?.role === "advisor";
 
   if (q.loading) return <Loading />;
@@ -29,6 +31,13 @@ export default function AppointmentDetailPage() {
         <dt>สถานที่</dt><dd><Where mode={a.mode} location={a.location} url={a.meeting_url} /></dd>
         {a.cancel_reason && (<><dt>เหตุผลที่ยกเลิก</dt><dd>{a.cancel_reason}</dd></>)}
       </dl>
+
+      {(a.status === "pending" || a.status === "confirmed") && new Date(a.ends_at).getTime() > Date.now() && (
+        <div className="row wrap">
+          <a className="btn sm" href={googleCalendarUrl(a, isAdvisor ? "advisor" : "student")} target="_blank" rel="noopener noreferrer">เพิ่มลง Google Calendar</a>
+          <button className="btn sm" onClick={() => api.downloadCalendar(a.id).catch((e) => toast.fail(e))}>ดาวน์โหลด .ics (Apple / Outlook)</button>
+        </div>
+      )}
 
       <section>
         <h2>บันทึกการปรึกษา</h2>

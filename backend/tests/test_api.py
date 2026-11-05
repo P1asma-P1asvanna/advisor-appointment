@@ -417,3 +417,36 @@ def test_advisor_directory(client, thana):
     items = client.get(f"{API}/advisors", headers=thana).json()["items"]
     assert [a["name"] for a in items] == ["อ.ณัฐวุฒิ รัตนวงศ์", "อ.สุรีย์พร ใจดี"]
     assert len(client.get(f"{API}/advisors", params={"department": "คณิตศาสตร์"}, headers=thana).json()["items"]) == 1
+
+
+# ------------------------------------------------------------ calendar export
+
+def test_calendar_export_one_and_all(client, thana, sureeporn, mali):
+    items = upcoming(client, thana)
+    assert items
+    r = client.get(f"{API}/appointments/calendar.ics", headers=thana)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/calendar")
+    body = r.content.decode("utf-8")
+    assert body.startswith("BEGIN:VCALENDAR\r\n") and body.endswith("END:VCALENDAR\r\n")
+    assert body.count("BEGIN:VEVENT") == len(items)
+    assert all(len(line.encode("utf-8")) <= 75 for line in body.split("\r\n"))
+    one = client.get(f"{API}/appointments/{items[0]['id']}/calendar.ics", headers=thana)
+    assert one.status_code == 200 and one.content.decode().count("BEGIN:VEVENT") == 1
+    assert f"UID:{items[0]['id']}@advisor-appointment" in one.content.decode()
+    # an advisor gets their own appointments, an unrelated user gets 404, admins and anonymous are refused
+    assert client.get(f"{API}/appointments/calendar.ics", headers=sureeporn).status_code == 200
+    assert client.get(f"{API}/appointments/{items[0]['id']}/calendar.ics", headers=mali).status_code == 403
+    assert client.get(f"{API}/appointments/calendar.ics").status_code == 401
+
+
+def test_ics_escaping_and_folding():
+    from datetime import datetime, timezone
+    from app.ics import build_calendar
+    t = datetime(2030, 1, 2, 3, 4, tzinfo=timezone.utc)
+    a = {"id": "x", "status": "confirmed", "topic": "a,b;c\nd\\e " + "ก" * 80, "mode": "online", "location": None,
+         "meeting_url": "https://meet.example/x", "starts_at": t, "ends_at": t, "updated_at": t,
+         "advisor": {"name": "อ.ทดสอบ"}, "student": {"name": "น.ศ."}}
+    body = build_calendar([a], "student").decode("utf-8")
+    assert "a\\,b\\;c\\nd\\\\e" in body.replace("\r\n ", "")
+    assert all(len(l.encode("utf-8")) <= 75 for l in body.split("\r\n"))
+    assert "DTSTART:20300102T030400Z" in body

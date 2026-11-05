@@ -1,6 +1,6 @@
-import { get, patch, post, put } from "./client";
+import { download, get, patch, post, put } from "./client";
 import type {
-  AdvisorRef, AppNotification, Appointment, AppointmentDetail, ImportResult, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
+  AdvisorRef, AppNotification, Appointment, AppointmentDetail, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
   Role, Slot, Task, TaskStatus, User, Visibility,
 } from "./types";
 
@@ -13,8 +13,6 @@ export const api = {
   users: (q: { role?: Role; q?: string } = {}) => get<{ items: ManagedUser[] }>("/admin/users", q),
   createUser: (b: { email: string; full_name: string; role: Role; department?: string; password: string }) =>
     post<ManagedUser>("/admin/users", b),
-  importUsers: (rows: { email: string; full_name: string; role: string; department: string; password: string }[], dry_run: boolean) =>
-    post<ImportResult>("/admin/users/import", { rows, dry_run }),
   updateUser: (id: string, b: { full_name?: string; department?: string; is_active?: boolean }) =>
     patch<ManagedUser>(`/admin/users/${id}`, b),
   resetPassword: (id: string, password: string) => post<{ ok: boolean }>(`/admin/users/${id}/reset-password`, { password }),
@@ -28,6 +26,8 @@ export const api = {
 
   book: (slot_id: string, topic: string) => post<Appointment>("/appointments", { slot_id, topic }),
   appointments: (view: "upcoming" | "past" | "all" = "all") => get<{ items: Appointment[] }>("/appointments", { view }),
+  downloadCalendar: (id?: string) =>
+    download(id ? `/appointments/${id}/calendar.ics` : "/appointments/calendar.ics", id ? "appointment.ics" : "advisor-appointments.ics"),
   appointment: (id: string) => get<AppointmentDetail>(`/appointments/${id}`),
   cancelAppointment: (id: string, reason?: string) => post<Appointment>(`/appointments/${id}/cancel`, { reason }),
   setStatus: (id: string, status: "completed" | "no_show") => post<Appointment>(`/appointments/${id}/status`, { status }),

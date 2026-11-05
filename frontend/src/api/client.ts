@@ -68,3 +68,23 @@ export const get = <T>(path: string, query?: Query) => request<T>("GET", path, {
 export const post = <T>(path: string, body?: unknown) => request<T>("POST", path, { body: body ?? {} });
 export const patch = <T>(path: string, body: unknown) => request<T>("PATCH", path, { body });
 export const put = <T>(path: string, body: unknown) => request<T>("PUT", path, { body });
+
+/** Authenticated file download (the Authorization header can't be sent by a plain <a href>). */
+export async function download(path: string, filename: string): Promise<void> {
+  const token = tokenStore.get();
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, { headers: token ? { Authorization: "Bearer " + token } : {} });
+  } catch {
+    throw new ApiError(0, "network_error", "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่");
+  }
+  if (!res.ok) throw new ApiError(res.status, "error", `ดาวน์โหลดไม่สำเร็จ (${res.status})`);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
