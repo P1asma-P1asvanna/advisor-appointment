@@ -6,8 +6,8 @@ import type { Role } from "../api/types";
 import { ROLE_TH } from "../lib/labels";
 
 const NAV: Record<Role, [string, string][]> = {
-  student: [["/book", "จองนัดหมาย"], ["/appointments", "นัดของฉัน"], ["/tasks", "งานติดตาม"], ["/notifications", "การแจ้งเตือน"]],
-  advisor: [["/slots", "เวลาว่างของฉัน"], ["/appointments", "นัดหมาย"], ["/tasks", "งานที่มอบหมาย"], ["/notifications", "การแจ้งเตือน"]],
+  student: [["/book", "จองนัดหมาย"], ["/appointments", "นัดของฉัน"], ["/calendar", "ปฏิทิน"], ["/tasks", "งานติดตาม"], ["/notifications", "การแจ้งเตือน"]],
+  advisor: [["/slots", "เวลาว่างของฉัน"], ["/appointments", "นัดหมาย"], ["/calendar", "ปฏิทิน"], ["/tasks", "งานที่มอบหมาย"], ["/notifications", "การแจ้งเตือน"]],
   admin: [["/overview", "ภาพรวมภาควิชา"], ["/users", "จัดการผู้ใช้"], ["/policy", "กติกาการจอง"], ["/notifications", "การแจ้งเตือน"]],
 };
 

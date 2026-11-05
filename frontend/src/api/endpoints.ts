@@ -1,4 +1,4 @@
-import { download, get, patch, post, put } from "./client";
+import { get, patch, post, put } from "./client";
 import type {
   AdvisorRef, AppNotification, Appointment, AppointmentDetail, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
   Role, Slot, Task, TaskStatus, User, Visibility,
@@ -26,8 +26,6 @@ export const api = {
 
   book: (slot_id: string, topic: string) => post<Appointment>("/appointments", { slot_id, topic }),
   appointments: (view: "upcoming" | "past" | "all" = "all") => get<{ items: Appointment[] }>("/appointments", { view }),
-  downloadCalendar: (id?: string) =>
-    download(id ? `/appointments/${id}/calendar.ics` : "/appointments/calendar.ics", id ? "appointment.ics" : "advisor-appointments.ics"),
   appointment: (id: string) => get<AppointmentDetail>(`/appointments/${id}`),
   cancelAppointment: (id: string, reason?: string) => post<Appointment>(`/appointments/${id}/cancel`, { reason }),
   setStatus: (id: string, status: "completed" | "no_show") => post<Appointment>(`/appointments/${id}/status`, { status }),

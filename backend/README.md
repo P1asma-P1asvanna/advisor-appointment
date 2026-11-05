@@ -81,8 +81,6 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `POST` | `/api/v1/slots/{slot_id}/cancel` | อาจารย์ | ปิดช่องนี้ |
 | `POST` | `/api/v1/appointments` | นักศึกษา | ยืนยันการจอง |
 | `GET` | `/api/v1/appointments` | นักศึกษา, อาจารย์ | รายการนัด / นัดของฉัน |
-| `GET` | `/api/v1/appointments/calendar.ics` | นักศึกษา, อาจารย์ | ไฟล์ปฏิทิน (.ics) ของนัดที่กำลังจะมาถึงทั้งหมด |
-| `GET` | `/api/v1/appointments/{appointment_id}/calendar.ics` | ผู้ร่วมนัด | ไฟล์ปฏิทินของนัดเดียว |
 | `GET` | `/api/v1/appointments/{appointment_id}` | ผู้ร่วมนัด | หน้ารายละเอียดนัด |
 | `POST` | `/api/v1/appointments/{appointment_id}/cancel` | ผู้ร่วมนัด | ยกเลิกนัด |
 | `POST` | `/api/v1/appointments/{appointment_id}/status` | อาจารย์ | ปรึกษาเสร็จสิ้น / ไม่มาตามนัด |
@@ -137,7 +135,7 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 ```bash
 pytest                                                    # 14 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
 createdb advisor_test
-TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 51 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
+TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 49 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
 ```
 
 ชื่อฐานข้อมูลทดสอบต้องลงท้ายด้วย `_test` ชุดทดสอบจะล้างและสร้างตารางใหม่ทุกครั้ง และโหลด `seed.sql` ก่อนทุกเทสต์
@@ -146,7 +144,7 @@ TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 51 ข้อ HT
 
 ตรวจแล้ว (รันจริง):
 - `schema_v3.sql` และฟังก์ชันทั้งหมดบน PostgreSQL 16 รวมถึงการจองพร้อมกันสองเซสชัน
-- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 65 ข้อ
+- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 63 ข้อ
 - `schema_v4.sql` ใช้ซ้ำได้ (idempotent) และลองใช้ทับฐานข้อมูลที่มีข้อมูลตัวอย่างอยู่แล้ว แล้วรัน `clear_demo_data.sql` ตามด้วย
 
 ส่วนที่ผูกกับ FastAPI/psycopg จริง (routing, dependency, pool) ตรวจผ่าน CI บน GitHub และใช้งานจริงบน Render แล้วสำหรับ endpoint ชุดแรก

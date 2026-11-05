@@ -176,3 +176,25 @@ tr.off td { opacity: .55; }
   .filters { flex-direction: column; align-items: stretch; }
   .filters .field.inline { min-width: 0; }
 }
+
+/* calendar */
+.cal-bar { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.cal-title { min-width: 9rem; text-align: center; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.cal-head { background: var(--gray-bg); color: var(--muted); font-size: .85rem; text-align: center; padding: .4rem 0; }
+.cal-cell { font: inherit; color: inherit; text-align: left; background: var(--surface); border: 0; min-height: 6.2rem; padding: .35rem .4rem; display: flex; flex-direction: column; gap: .2rem; cursor: pointer; min-width: 0; }
+.cal-cell.blank { background: var(--bg); cursor: default; }
+.cal-cell:hover:not(.blank) { background: var(--brand-soft); }
+.cal-cell.sel { outline: 2px solid var(--brand); outline-offset: -2px; }
+.cal-num { font-size: .9rem; width: 1.6rem; height: 1.6rem; display: inline-grid; place-items: center; border-radius: 50%; }
+.cal-cell.today .cal-num { background: var(--brand); color: var(--brand-ink); font-weight: 600; }
+.cal-chip { font-size: .75rem; padding: .05rem .35rem; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--gray-bg); color: var(--gray); }
+.cal-chip.teal { background: var(--teal-bg); color: var(--teal); } .cal-chip.amber { background: var(--amber-bg); color: var(--amber); }
+.cal-chip.green { background: var(--green-bg); color: var(--green); } .cal-chip.red { background: var(--red-bg); color: var(--red); }
+.cal-more { font-size: .75rem; color: var(--muted); }
+.cal-dot { display: none; }
+@media (max-width: 800px) {
+  .cal-cell { min-height: 3.4rem; align-items: center; padding: .25rem; }
+  .cal-chip, .cal-more { display: none; }
+  .cal-dot { display: inline-block; background: var(--brand); color: var(--brand-ink); border-radius: 99px; font-size: .7rem; min-width: 1.15rem; text-align: center; padding: 0 .3rem; }
+}

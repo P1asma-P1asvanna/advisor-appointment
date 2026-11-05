@@ -2,12 +2,11 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends
 
 from ..db import get_conn, many, one, run
 from ..deps import require_roles
 from ..errors import ApiError
-from ..ics import build_calendar
 from ..notify import fmt_when, notify
 from ..repo import APPT_SELECT, load_appt, shape_appt
 from ..schemas import BookIn, CancelIn, NoteIn, StatusIn
@@ -56,36 +55,6 @@ def list_appointments(
         {"uid": user["id"], "status": status, "view": view, "limit": max(1, min(limit, 500))},
     )
     return {"items": [shape_appt(r) for r in rows]}
-
-
-def _ics(appts: list[dict], role: str, name: str) -> Response:
-    return Response(
-        build_calendar(appts, role),
-        media_type="text/calendar; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"},
-    )
-
-
-@router.get("/calendar.ics")
-def calendar_all(user=Depends(require_roles(*PARTICIPANTS)), conn=Depends(get_conn)):
-    """All my upcoming (pending/confirmed) appointments as one iCalendar file. Declared before /{id}."""
-    rows = many(
-        conn,
-        APPT_SELECT
-        + """
-        WHERE (a.student_id = %(uid)s OR a.advisor_id = %(uid)s)
-          AND a.status IN ('pending', 'confirmed') AND s.starts_at > now()
-        ORDER BY s.starts_at
-        """,
-        {"uid": user["id"]},
-    )
-    return _ics([shape_appt(r) for r in rows], user["role"], "advisor-appointments.ics")
-
-
-@router.get("/{appointment_id}/calendar.ics")
-def calendar_one(appointment_id: UUID, user=Depends(require_roles(*PARTICIPANTS)), conn=Depends(get_conn)):
-    appt = shape_appt(load_appt(conn, appointment_id, user))
-    return _ics([appt], user["role"], "appointment.ics")
 
 
 @router.get("/{appointment_id}")

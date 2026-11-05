@@ -9,6 +9,7 @@ import BookPage from "./pages/student/BookPage";
 import SlotsPage from "./pages/advisor/SlotsPage";
 import AppointmentsPage from "./pages/shared/AppointmentsPage";
 import AppointmentDetailPage from "./pages/shared/AppointmentDetailPage";
+import CalendarPage from "./pages/shared/CalendarPage";
 import TasksPage from "./pages/shared/TasksPage";
 import NotificationsPage from "./pages/shared/NotificationsPage";
 import OverviewPage from "./pages/admin/OverviewPage";
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/slots" element={<Guard roles={["advisor"]}><SlotsPage /></Guard>} />
         <Route path="/appointments" element={<Guard roles={["student", "advisor"]}><AppointmentsPage /></Guard>} />
         <Route path="/appointments/:id" element={<Guard roles={["student", "advisor"]}><AppointmentDetailPage /></Guard>} />
+        <Route path="/calendar" element={<Guard roles={["student", "advisor"]}><CalendarPage /></Guard>} />
         <Route path="/tasks" element={<Guard roles={["student", "advisor"]}><TasksPage /></Guard>} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/overview" element={<Guard roles={["admin"]}><OverviewPage /></Guard>} />

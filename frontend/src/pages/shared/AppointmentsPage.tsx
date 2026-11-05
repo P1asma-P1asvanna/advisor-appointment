@@ -28,8 +28,7 @@ export default function AppointmentsPage() {
 
   return (
     <>
-      <PageHeader title={isAdvisor ? "นัดหมาย" : "นัดของฉัน"} sub={isAdvisor ? "นัดที่นักศึกษาจองเข้าพบ" : "นัดที่คุณจองไว้และประวัติการพบ"}
-        actions={<button className="btn" onClick={() => api.downloadCalendar().catch((e) => toast.fail(e))}>ส่งออกนัดทั้งหมดเข้าปฏิทิน (.ics)</button>} />
+      <PageHeader title={isAdvisor ? "นัดหมาย" : "นัดของฉัน"} sub={isAdvisor ? "นัดที่นักศึกษาจองเข้าพบ" : "นัดที่คุณจองไว้และประวัติการพบ"} />
       <Tabs<"upcoming" | "past"> value={view} onChange={setView} items={[["upcoming", "กำลังจะมาถึง"], ["past", "ที่ผ่านมา"]]} />
       {list.loading ? <Loading /> : list.error ? <ErrorBox message={list.error} retry={list.reload} /> :
         list.data!.items.length === 0 ? <Empty title={view === "upcoming" ? "ไม่มีนัดที่กำลังจะมาถึง" : "ยังไม่มีประวัติการพบ"} hint={!isAdvisor && view === "upcoming" ? "ไปที่เมนู จองนัดหมาย เพื่อเลือกเวลา" : undefined} /> :
