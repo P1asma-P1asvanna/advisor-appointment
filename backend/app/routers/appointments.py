@@ -9,7 +9,7 @@ from ..deps import require_roles
 from ..errors import ApiError
 from ..notify import fmt_when, notify
 from ..repo import APPT_SELECT, load_appt, shape_appt
-from ..schemas import BookIn, CancelIn, NoteIn, StatusIn
+from ..schemas import BookIn, CancelIn, NoteIn, StatusIn, TopicPatch
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -83,6 +83,23 @@ def get_appointment(appointment_id: UUID, user=Depends(require_roles(*PARTICIPAN
         {"id": appointment_id},
     )
     return {**shape_appt(appt), "notes": notes, "tasks": tasks}
+
+
+@router.patch("/{appointment_id}")
+def update_topic(appointment_id: UUID, body: TopicPatch, user=Depends(require_roles("student")), conn=Depends(get_conn)):
+    """The student fixes the topic of their own appointment until it starts. The advisor is told."""
+    appt = load_appt(conn, appointment_id, user)
+    if appt["student_id"] != user["id"]:
+        raise ApiError(404, "appointment_not_found", "ไม่พบนัดหมายนี้")
+    if appt["status"] not in ("pending", "confirmed") or appt["starts_at"] <= datetime.now(timezone.utc):
+        raise ApiError(409, "not_editable", "นัดนี้เริ่มแล้วหรือปิดไปแล้ว แก้หัวข้อไม่ได้")
+    with conn.transaction():
+        run(conn, "UPDATE appointments SET topic = %(t)s, updated_at = now() WHERE id = %(id)s",
+            {"t": body.topic, "id": appointment_id})
+        if body.topic != appt["topic"]:
+            notify(conn, appt["advisor_id"], "system", "นักศึกษาแก้หัวข้อนัด",
+                   f"{fmt_when(appt['starts_at'])} · {body.topic}", appointment_id)
+    return shape_appt(load_appt(conn, appointment_id, user))
 
 
 @router.post("/{appointment_id}/cancel")

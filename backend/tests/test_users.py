@@ -92,7 +92,6 @@ def test_update_name_and_department(client, mali):
     assert r.status_code == 200 and r.json()["full_name"].endswith("(ปรับ)") and r.json()["department"] == "คณิตศาสตร์"
     assert client.patch(f"{ADMIN}/{uid}", headers=mali, json={"department": "  "}).status_code == 422  # a student needs one
     assert client.patch(f"{ADMIN}/{uid}", headers=mali, json={}).status_code == 422
-    assert client.patch(f"{ADMIN}/{uid}", headers=mali, json={"role": "admin"}).status_code == 422      # the role is fixed
     missing = client.patch(f"{ADMIN}/00000000-0000-0000-0000-00000000dead", headers=mali, json={"full_name": "x"})
     assert missing.status_code == 404 and code(missing) == "user_not_found"
 
@@ -227,3 +226,48 @@ def test_bootstrap_does_nothing_without_settings(client, monkeypatch):
         conn.execute("DELETE FROM users WHERE role = 'admin'")
         assert bootstrap.ensure_admin(conn) is False
         assert conn.execute("SELECT count(*) AS n FROM users WHERE role = 'admin'").fetchone()["n"] == 0
+
+
+# ------------------------------------------------------------ editing
+
+def test_admin_fixes_email_and_role_and_the_person_is_signed_out(client, mali):
+    assert new_user(client, mali, email="typo@example.edu").status_code == 201
+    old = login(client, "typo@example.edu", "temp-pass-1")
+    assert old.status_code == 200
+    uid = user_id(client, mali, "typo@example.edu")
+    r = client.patch(f"{ADMIN}/{uid}", headers=mali, json={"email": " Right@Example.edu ", "role": "advisor"})
+    assert r.status_code == 200, r.text
+    assert r.json()["email"] == "right@example.edu" and r.json()["role"] == "advisor"
+    # the old session stops working and the old email no longer signs in
+    assert client.get(f"{API}/me", headers=bearer(old.json()["access_token"])).status_code == 401
+    assert login(client, "typo@example.edu", "temp-pass-1").status_code == 401
+    assert login(client, "right@example.edu", "temp-pass-1", role="advisor").status_code == 200
+
+
+def test_email_and_role_edits_are_guarded(client, mali, thana):
+    uid = user_id(client, mali, "thana@example.edu")
+    r = client.patch(f"{ADMIN}/{uid}", headers=mali, json={"role": "advisor"})
+    assert r.status_code == 409 and code(r) == "role_in_use"          # he still has a live appointment
+    taken = client.patch(f"{ADMIN}/{uid}", headers=mali, json={"email": "pimlada@example.edu"})
+    assert taken.status_code == 409 and code(taken) == "email_taken"
+    assert client.patch(f"{ADMIN}/{uid}", headers=mali, json={"email": "not-an-email"}).status_code == 422
+    me = user_id(client, mali, "mali@example.edu")
+    own = client.patch(f"{ADMIN}/{me}", headers=mali, json={"role": "student"})
+    assert own.status_code == 409 and code(own) == "cannot_modify_self"
+    assert client.patch(f"{ADMIN}/{uid}", headers=thana, json={"email": "x@example.edu"}).status_code == 403
+    # an admin without a department may become an advisor only with one
+    assert new_user(client, mali, email="staff@example.edu", role="admin", department=None).status_code == 201
+    sid = user_id(client, mali, "staff@example.edu")
+    need = client.patch(f"{ADMIN}/{sid}", headers=mali, json={"role": "advisor"})
+    assert need.status_code == 422 and code(need) == "department_required"
+    ok = client.patch(f"{ADMIN}/{sid}", headers=mali, json={"role": "advisor", "department": "คณิตศาสตร์"})
+    assert ok.status_code == 200 and ok.json()["role"] == "advisor"
+
+
+def test_anyone_can_fix_their_own_name_only(client, thana):
+    r = client.patch(f"{API}/me", headers=thana, json={"full_name": "  ธนา ศรีสุข (แก้)  "})
+    assert r.status_code == 200 and r.json()["full_name"] == "ธนา ศรีสุข (แก้)"
+    assert client.get(f"{API}/me", headers=thana).json()["full_name"] == "ธนา ศรีสุข (แก้)"
+    assert client.patch(f"{API}/me", headers=thana, json={"full_name": " "}).status_code == 422
+    r = client.patch(f"{API}/me", headers=thana, json={"full_name": "ธนา", "role": "admin", "email": "a@b.co"})
+    assert r.status_code == 200 and r.json()["role"] == "student" and r.json()["email"] == "thana@example.edu"

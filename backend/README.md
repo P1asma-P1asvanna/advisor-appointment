@@ -75,13 +75,16 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `GET` | `/health` | ทุกคน | ตรวจว่าระบบพร้อม |
 | `POST` | `/api/v1/auth/login` | ทุกคน | เข้าสู่ระบบ |
 | `GET` | `/api/v1/me` | ผู้ที่ login | บัตรผู้ใช้ที่เมนูซ้าย |
+| `PATCH` | `/api/v1/me` | ผู้ที่ login | แก้ชื่อของตัวเอง (อีเมล/บทบาท/ภาควิชาแก้ไม่ได้) |
 | `GET` | `/api/v1/advisors` | ผู้ที่ login | ตัวกรองภาควิชาในหน้าจองนัด |
 | `GET` | `/api/v1/slots` | ผู้ที่ login (ขอบเขตตามบทบาท) | ตารางเวลาว่าง / รายการให้จอง |
 | `POST` | `/api/v1/slots` | อาจารย์ | เปิดเวลานี้ |
+| `PATCH` | `/api/v1/slots/{slot_id}` | อาจารย์เจ้าของช่อง | แก้ช่องที่ยังไม่เริ่ม: ช่องว่างแก้เวลา/รูปแบบ/สถานที่ได้ ช่องที่มีคนจองแก้ได้เฉพาะรูปแบบ/สถานที่ (แจ้งนักศึกษา) |
 | `POST` | `/api/v1/slots/{slot_id}/cancel` | อาจารย์ | ปิดช่องนี้ |
 | `POST` | `/api/v1/appointments` | นักศึกษา | ยืนยันการจอง |
 | `GET` | `/api/v1/appointments` | นักศึกษา, อาจารย์ | รายการนัด / นัดของฉัน |
 | `GET` | `/api/v1/appointments/{appointment_id}` | ผู้ร่วมนัด | หน้ารายละเอียดนัด |
+| `PATCH` | `/api/v1/appointments/{appointment_id}` | นักศึกษาเจ้าของนัด | แก้หัวข้อนัดก่อนเริ่ม (แจ้งอาจารย์) |
 | `POST` | `/api/v1/appointments/{appointment_id}/cancel` | ผู้ร่วมนัด | ยกเลิกนัด |
 | `POST` | `/api/v1/appointments/{appointment_id}/status` | อาจารย์ | ปรึกษาเสร็จสิ้น / ไม่มาตามนัด |
 | `POST` | `/api/v1/appointments/{appointment_id}/notes` | อาจารย์ | บันทึก (ครั้งแรก) |
@@ -99,7 +102,7 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `POST` | `/api/v1/auth/change-password` | ผู้ที่ login | บัญชีของฉัน: เปลี่ยนรหัสผ่าน (ได้ token ใหม่กลับมา) |
 | `GET` | `/api/v1/admin/users` | เจ้าหน้าที่ | รายชื่อผู้ใช้ (กรองบทบาท/ค้นหา) |
 | `POST` | `/api/v1/admin/users` | เจ้าหน้าที่ | เพิ่มผู้ใช้พร้อมรหัสผ่านชั่วคราว |
-| `PATCH` | `/api/v1/admin/users/{user_id}` | เจ้าหน้าที่ | แก้ชื่อ/ภาควิชา, ปิดหรือเปิดบัญชี |
+| `PATCH` | `/api/v1/admin/users/{user_id}` | เจ้าหน้าที่ | แก้ชื่อ/ภาควิชา/**อีเมล/บทบาท**, ปิดหรือเปิดบัญชี (แก้อีเมลหรือบทบาทแล้วผู้นั้นถูกออกจากระบบ; เปลี่ยนบทบาทไม่ได้ถ้ามีนัดหรือช่องว่างค้าง; แก้อีเมล/บทบาทของตัวเองไม่ได้) |
 | `POST` | `/api/v1/admin/users/{user_id}/reset-password` | เจ้าหน้าที่ | รีเซ็ตรหัสผ่านเป็นรหัสชั่วคราว |
 
 พฤติกรรมที่ควรรู้
@@ -135,7 +138,7 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 ```bash
 pytest                                                    # 14 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
 createdb advisor_test
-TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 49 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
+TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 56 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
 ```
 
 ชื่อฐานข้อมูลทดสอบต้องลงท้ายด้วย `_test` ชุดทดสอบจะล้างและสร้างตารางใหม่ทุกครั้ง และโหลด `seed.sql` ก่อนทุกเทสต์
@@ -144,7 +147,7 @@ TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 49 ข้อ HT
 
 ตรวจแล้ว (รันจริง):
 - `schema_v3.sql` และฟังก์ชันทั้งหมดบน PostgreSQL 16 รวมถึงการจองพร้อมกันสองเซสชัน
-- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 63 ข้อ
+- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 70 ข้อ
 - `schema_v4.sql` ใช้ซ้ำได้ (idempotent) และลองใช้ทับฐานข้อมูลที่มีข้อมูลตัวอย่างอยู่แล้ว แล้วรัน `clear_demo_data.sql` ตามด้วย
 
 ส่วนที่ผูกกับ FastAPI/psycopg จริง (routing, dependency, pool) ตรวจผ่าน CI บน GitHub และใช้งานจริงบน Render แล้วสำหรับ endpoint ชุดแรก

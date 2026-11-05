@@ -66,19 +66,39 @@ def _other_user(conn, user_id: UUID, me: dict) -> dict:
 
 @router.patch("/{user_id}")
 def update_user(user_id: UUID, body: UserPatch, me=Depends(require_roles("admin")), conn=Depends(get_conn)):
-    """Rename, change department, or switch an account on or off.
+    """Fix a name, department, email or role, or switch an account on or off.
 
-    Switching an advisor off also closes the open time slots they offered, so nobody can book them.
-    Appointments already booked stay as they are, for the admin to sort out.
+    * Changing the email or the role signs the person out everywhere (they sign in again with the new email).
+    * The role cannot change while the person has live appointments or open future slots.
+    * You cannot change your own email, role or active flag here.
+    * Switching an advisor off also closes the open time slots they offered.
     """
     target = _other_user(conn, user_id, me)
-    if body.is_active is False and target["id"] == me["id"]:
-        raise ApiError(409, "cannot_modify_self", "ปิดบัญชีของตัวเองไม่ได้")
+    email_changed = body.email is not None and body.email != target["email"]
+    role_changed = body.role is not None and body.role != target["role"]
+    if target["id"] == me["id"] and (email_changed or role_changed or body.is_active is False):
+        raise ApiError(409, "cannot_modify_self", "แก้อีเมล บทบาท หรือปิดบัญชีของตัวเองไม่ได้ ให้เจ้าหน้าที่คนอื่นทำให้")
     department = body.department
     if department is not None:
         department = department.strip() or None
-        if department is None and target["role"] in ("student", "advisor"):
-            raise ApiError(422, "department_required", "นักศึกษาและอาจารย์ต้องมีภาควิชา")
+    new_role = body.role or target["role"]
+    new_dept = department if body.department is not None else target["department"]
+    if new_role in ("student", "advisor") and not new_dept:
+        raise ApiError(422, "department_required", "นักศึกษาและอาจารย์ต้องมีภาควิชา")
+    if role_changed:
+        busy = one(
+            conn,
+            """
+            SELECT (SELECT count(*) FROM appointments a JOIN availability_slots s ON s.id = a.slot_id
+                    WHERE (a.student_id = %(id)s OR a.advisor_id = %(id)s)
+                      AND a.status IN ('pending', 'confirmed') AND s.ends_at > now())
+                 + (SELECT count(*) FROM availability_slots
+                    WHERE advisor_id = %(id)s AND status = 'open' AND starts_at > now()) AS n
+            """,
+            {"id": user_id},
+        )
+        if busy["n"]:
+            raise ApiError(409, "role_in_use", "เปลี่ยนบทบาทไม่ได้ เพราะยังมีนัดหรือช่องเวลาว่างค้างอยู่ ให้ยกเลิกหรือรอให้เสร็จก่อน")
     with conn.transaction():
         row = one(
             conn,
@@ -86,7 +106,10 @@ def update_user(user_id: UUID, body: UserPatch, me=Depends(require_roles("admin"
             UPDATE users SET
               full_name  = COALESCE(%(full_name)s, full_name),
               department = CASE WHEN %(set_dept)s::bool THEN %(department)s ELSE department END,
-              is_active  = COALESCE(%(is_active)s, is_active)
+              is_active  = COALESCE(%(is_active)s, is_active),
+              email      = COALESCE(%(email)s, email),
+              role       = COALESCE(%(role)s, role),
+              password_changed_at = CASE WHEN %(signout)s::bool THEN %(now)s ELSE password_changed_at END
             WHERE id = %(id)s
             RETURNING {COLUMNS}
             """,
@@ -96,6 +119,10 @@ def update_user(user_id: UUID, body: UserPatch, me=Depends(require_roles("admin"
                 "set_dept": body.department is not None,
                 "department": department,
                 "is_active": body.is_active,
+                "email": body.email,
+                "role": body.role,
+                "signout": email_changed or role_changed,
+                "now": datetime.now(timezone.utc),
             },
         )
         if body.is_active is False and target["role"] == "advisor":

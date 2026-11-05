@@ -6,7 +6,7 @@ from .. import config, throttle
 from ..db import get_conn, many, one, run
 from ..deps import current_user, current_user_even_if_password_unchanged, public_user
 from ..errors import ApiError
-from ..schemas import ChangePasswordIn, LoginIn
+from ..schemas import ChangePasswordIn, LoginIn, ProfilePatch
 from ..security import DUMMY_HASH, create_token, hash_password, verify_password
 
 router = APIRouter(tags=["auth"])
@@ -76,6 +76,18 @@ def change_password(
 @router.get("/me")
 def me(user=Depends(current_user_even_if_password_unchanged)):
     return public_user(user)
+
+
+@router.patch("/me")
+def update_me(body: ProfilePatch, user=Depends(current_user), conn=Depends(get_conn)):
+    """Anyone may fix their own display name. Email, role and department are changed by the admin."""
+    row = one(
+        conn,
+        """UPDATE users SET full_name = %(n)s WHERE id = %(id)s
+           RETURNING id, email, full_name, role, department, must_change_password""",
+        {"n": body.full_name, "id": user["id"]},
+    )
+    return public_user(row)
 
 
 @router.get("/advisors")

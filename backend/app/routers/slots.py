@@ -7,7 +7,8 @@ from ..db import get_conn, many, one
 from ..deps import current_user, require_roles
 from ..errors import ApiError
 from ..repo import SLOT_SELECT, shape_slot
-from ..schemas import SlotIn
+from ..notify import fmt_when, notify
+from ..schemas import SlotIn, SlotPatch
 
 router = APIRouter(prefix="/slots", tags=["slots"])
 
@@ -115,3 +116,48 @@ def cancel_slot(slot_id: UUID, user=Depends(require_roles("advisor")), conn=Depe
         raise ApiError(409, "slot_not_open", "ปิดได้เฉพาะช่องที่ยังว่าง ถ้ามีคนจองแล้วให้ยกเลิกนัดแทน")
     row = one(conn, SLOT_SELECT + " WHERE s.id = %(id)s", {"id": slot_id})
     return shape_slot(row, show_student=True)
+
+
+@router.patch("/{slot_id}")
+def update_slot(slot_id: UUID, body: SlotPatch, user=Depends(require_roles("advisor")), conn=Depends(get_conn)):
+    """Fix a slot you opened. An open slot can change time, mode and place; a booked slot can change only
+    the mode and place (its student is told), because moving the time would break their plans."""
+    slot = one(conn, SLOT_SELECT + " WHERE s.id = %(id)s AND s.advisor_id = %(uid)s", {"id": slot_id, "uid": user["id"]})
+    if slot is None:
+        raise ApiError(404, "slot_not_found", "ไม่พบช่องเวลานี้")
+    if slot["status"] == "cancelled":
+        raise ApiError(409, "slot_closed", "ช่องนี้ถูกปิดไปแล้ว แก้ไขไม่ได้ ให้เปิดช่องใหม่แทน")
+    now = datetime.now(timezone.utc)
+    if slot["starts_at"] <= now:
+        raise ApiError(409, "slot_started", "ช่องเวลานี้เริ่มหรือผ่านไปแล้ว แก้ไขไม่ได้")
+    starts, ends = slot["starts_at"], slot["ends_at"]
+    if body.starts_at is not None:
+        if slot["status"] != "open":
+            raise ApiError(409, "slot_booked_time", "ช่องที่มีคนจองแล้วเปลี่ยนเวลาไม่ได้ ให้ยกเลิกนัดแล้วเปิดช่องใหม่")
+        if body.starts_at <= now:
+            raise ApiError(422, "slot_in_past", "เลือกเวลาในอนาคต")
+        starts, ends = body.starts_at, body.ends_at
+    fields = body.model_fields_set
+    mode = body.mode or slot["mode"]
+    location = (body.location or None) if "location" in fields else slot["location"]
+    url = (body.meeting_url or None) if "meeting_url" in fields else slot["meeting_url"]
+    where_changed = (mode, location, url) != (slot["mode"], slot["location"], slot["meeting_url"])
+    with conn.transaction():
+        one(
+            conn,
+            """
+            UPDATE availability_slots SET starts_at = %(s)s, ends_at = %(e)s, mode = %(m)s, location = %(l)s, meeting_url = %(u)s
+            WHERE id = %(id)s RETURNING id
+            """,
+            {"s": starts, "e": ends, "m": mode, "l": location, "u": url, "id": slot_id},
+        )
+        if slot["status"] == "booked" and where_changed:
+            appt = one(
+                conn,
+                "SELECT id, student_id, topic FROM appointments WHERE slot_id = %(id)s AND status IN ('pending', 'confirmed')",
+                {"id": slot_id},
+            )
+            if appt:
+                notify(conn, appt["student_id"], "system", "อาจารย์แก้ไขสถานที่/ลิงก์นัด",
+                       f"{fmt_when(starts)} · {appt['topic']}", appt["id"])
+    return shape_slot(one(conn, SLOT_SELECT + " WHERE s.id = %(id)s", {"id": slot_id}), show_student=True)

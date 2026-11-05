@@ -122,17 +122,53 @@ class UserIn(BaseModel):
 
 
 class UserPatch(BaseModel):
-    """The role cannot be changed: create a new account instead, so history stays attached to the right person."""
+    """Admin edits. The email and the role are the important ones, so only the admin can change them
+    (a role change is refused while the person still has live appointments or open slots)."""
 
     full_name: Optional[Name120] = None
     department: Optional[Dept120] = None
     is_active: Optional[bool] = None
+    email: Optional[Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]] = None
+    role: Optional[Literal["student", "advisor", "admin"]] = None
 
     @model_validator(mode="after")
     def _something(self):
-        if self.full_name is None and self.department is None and self.is_active is None:
+        if all(v is None for v in (self.full_name, self.department, self.is_active, self.email, self.role)):
             raise ValueError("nothing to update")
         return self
+
+
+class ProfilePatch(BaseModel):
+    """What anyone may change about themselves: their display name."""
+
+    full_name: Name120
+
+
+class SlotPatch(BaseModel):
+    """Fields left out stay unchanged; an empty string clears location/meeting_url.
+    starts_at and ends_at are sent together (an open slot only)."""
+
+    starts_at: Optional[AwareDatetime] = None
+    ends_at: Optional[AwareDatetime] = None
+    mode: Optional[Literal["onsite", "online"]] = None
+    location: Optional[Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]] = None
+    meeting_url: Optional[Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)]] = None
+
+    @model_validator(mode="after")
+    def _check(self):
+        if (self.starts_at is None) != (self.ends_at is None):
+            raise ValueError("send starts_at and ends_at together")
+        if self.starts_at is not None:
+            minutes = (self.ends_at - self.starts_at).total_seconds() / 60
+            if minutes < 10 or minutes > 240:
+                raise ValueError("a slot must last between 10 and 240 minutes")
+        if self.starts_at is None and self.mode is None and self.location is None and self.meeting_url is None:
+            raise ValueError("nothing to update")
+        return self
+
+
+class TopicPatch(BaseModel):
+    topic: Text300
 
 
 class ResetPasswordIn(BaseModel):

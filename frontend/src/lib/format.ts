@@ -18,6 +18,9 @@ export const dueLabel = (ymd: string | null) =>
 export const pct = (v: number | null) => (v === null ? "–" : Math.round(v * 100) + "%");
 
 /** "2030-01-31T09:00" from a <input type=datetime-local> -> ISO with the Bangkok offset the API requires. */
+/** The reverse: an ISO instant -> "2030-01-31T09:00" in Bangkok time, for <input type=datetime-local>. */
+export const toBangkokLocal = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 16);
+
 export const bangkokIso = (local: string) => (local.length === 16 ? local + ":00" : local) + "+07:00";
 
 export function groupBy<T>(items: T[], key: (t: T) => string): [string, T[]][] {

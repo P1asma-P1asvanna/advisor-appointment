@@ -13,17 +13,40 @@ export default function AppointmentDetailPage() {
   const { id = "" } = useParams();
   const { user } = useAuth();
   const q = useLoad(() => api.appointment(id), [id]);
+  const toast = useToast();
   const isAdvisor = user?.role === "advisor";
+  const [editTopic, setEditTopic] = useState(false);
+  const [topic, setTopic] = useState("");
 
   if (q.loading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox message={q.error ?? "ไม่พบนัดหมายนี้"} />;
   const a = q.data;
   const canRecord = isAdvisor && a.status !== "cancelled";
+  const canEditTopic = user?.role === "student" && (a.status === "pending" || a.status === "confirmed") && new Date(a.starts_at).getTime() > Date.now();
+
+  async function saveTopic(e: FormEvent) {
+    e.preventDefault();
+    try {
+      await api.updateTopic(a.id, topic.trim());
+      toast.ok("แก้หัวข้อแล้ว");
+      setEditTopic(false);
+      q.reload();
+    } catch (err) {
+      toast.fail(err);
+    }
+  }
 
   return (
     <>
       <p><Link to="/appointments">← กลับไปรายการนัด</Link></p>
       <PageHeader title={a.topic} sub={`${dayLabel(a.starts_at)} · ${range(a.starts_at, a.ends_at)}`} actions={<ApptBadge s={a.status} />} />
+      {canEditTopic && (editTopic ? (
+        <form className="panel row wrap" onSubmit={saveTopic}>
+          <input className="grow" required maxLength={300} value={topic} onChange={(e) => setTopic(e.target.value)} />
+          <button className="btn sm primary">บันทึกหัวข้อ</button>
+          <button type="button" className="btn sm" onClick={() => setEditTopic(false)}>ยกเลิก</button>
+        </form>
+      ) : <p><button className="btn sm" onClick={() => { setTopic(a.topic); setEditTopic(true); }}>แก้หัวข้อ</button></p>)}
       <dl className="facts panel">
         <dt>{isAdvisor ? "นักศึกษา" : "อาจารย์"}</dt><dd>{isAdvisor ? a.student.name : `${a.advisor.name} · ${a.advisor.department ?? ""}`}</dd>
         <dt>สถานที่</dt><dd><Where mode={a.mode} location={a.location} url={a.meeting_url} /></dd>

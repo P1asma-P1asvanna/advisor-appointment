@@ -7,13 +7,14 @@ import type {
 export const api = {
   login: (email: string, password: string, role?: Role) => post<LoginResult>("/auth/login", { email, password, role }),
   me: () => get<User>("/me"),
+  updateMe: (full_name: string) => patch<User>("/me", { full_name }),
   changePassword: (current_password: string, new_password: string) =>
     post<LoginResult>("/auth/change-password", { current_password, new_password }),
 
   users: (q: { role?: Role; q?: string } = {}) => get<{ items: ManagedUser[] }>("/admin/users", q),
   createUser: (b: { email: string; full_name: string; role: Role; department?: string; password: string }) =>
     post<ManagedUser>("/admin/users", b),
-  updateUser: (id: string, b: { full_name?: string; department?: string; is_active?: boolean }) =>
+  updateUser: (id: string, b: { full_name?: string; department?: string; is_active?: boolean; email?: string; role?: Role }) =>
     patch<ManagedUser>(`/admin/users/${id}`, b),
   resetPassword: (id: string, password: string) => post<{ ok: boolean }>(`/admin/users/${id}/reset-password`, { password }),
   advisors: (department?: string) => get<{ items: AdvisorRef[] }>("/advisors", { department }),
@@ -22,8 +23,11 @@ export const api = {
     get<{ items: Slot[] }>("/slots", q),
   createSlot: (b: { starts_at: string; ends_at: string; mode: Mode; location?: string; meeting_url?: string }) =>
     post<Slot>("/slots", b),
+  updateSlot: (id: string, b: { starts_at?: string; ends_at?: string; mode?: Mode; location?: string; meeting_url?: string }) =>
+    patch<Slot>(`/slots/${id}`, b),
   cancelSlot: (id: string) => post<Slot>(`/slots/${id}/cancel`),
 
+  updateTopic: (id: string, topic: string) => patch<Appointment>(`/appointments/${id}`, { topic }),
   book: (slot_id: string, topic: string) => post<Appointment>("/appointments", { slot_id, topic }),
   appointments: (view: "upcoming" | "past" | "all" = "all") => get<{ items: Appointment[] }>("/appointments", { view }),
   appointment: (id: string) => get<AppointmentDetail>(`/appointments/${id}`),

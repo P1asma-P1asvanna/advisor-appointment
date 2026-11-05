@@ -417,3 +417,64 @@ def test_advisor_directory(client, thana):
     items = client.get(f"{API}/advisors", headers=thana).json()["items"]
     assert [a["name"] for a in items] == ["อ.ณัฐวุฒิ รัตนวงศ์", "อ.สุรีย์พร ใจดี"]
     assert len(client.get(f"{API}/advisors", params={"department": "คณิตศาสตร์"}, headers=thana).json()["items"]) == 1
+
+
+# ------------------------------------------------------------ editing slots and topics
+
+def _slots(client, headers, status):
+    now = datetime.now(timezone.utc)
+    return [x for x in client.get(f"{API}/slots", headers=headers).json()["items"]
+            if x["status"] == status and datetime.fromisoformat(x["starts_at"]) > now]  # the seed also has past slots
+
+
+def test_advisor_edits_an_open_slot_but_not_someone_elses(client, sureeporn, nattawut):
+    slot = _slots(client, sureeporn, "open")[0]
+    r = client.patch(f"{API}/slots/{slot['id']}", headers=sureeporn,
+                     json={"mode": "onsite", "location": "ห้อง 9-999", "meeting_url": ""})
+    assert r.status_code == 200, r.text
+    assert r.json()["location"] == "ห้อง 9-999" and r.json()["mode"] == "onsite" and r.json()["meeting_url"] is None
+    later = datetime.fromisoformat(slot["starts_at"]) + timedelta(hours=1)
+    r = client.patch(f"{API}/slots/{slot['id']}", headers=sureeporn,
+                     json={"starts_at": later.isoformat(), "ends_at": (later + timedelta(minutes=30)).isoformat()})
+    assert r.status_code in (200, 409), r.text  # 409 only if it lands on another of her slots
+    assert client.patch(f"{API}/slots/{slot['id']}", headers=nattawut, json={"location": "x"}).status_code == 404
+    assert client.patch(f"{API}/slots/{slot['id']}", headers=sureeporn, json={}).status_code == 422
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+    bad = client.patch(f"{API}/slots/{slot['id']}", headers=sureeporn,
+                       json={"starts_at": past.isoformat(), "ends_at": (past + timedelta(minutes=30)).isoformat()})
+    assert bad.status_code == 422 and code(bad) == "slot_in_past"
+
+
+def test_editing_a_slot_onto_another_slot_is_refused(client, sureeporn):
+    opens = _slots(client, sureeporn, "open")
+    a, b = opens[0], opens[1]
+    r = client.patch(f"{API}/slots/{a['id']}", headers=sureeporn, json={"starts_at": b["starts_at"], "ends_at": b["ends_at"]})
+    assert r.status_code == 409 and code(r) == "slot_overlaps"
+
+
+def test_a_booked_slot_keeps_its_time_but_may_change_place_and_the_student_is_told(client, sureeporn, thana):
+    booked = _slots(client, sureeporn, "booked")
+    mine = {a["slot_id"] for a in upcoming(client, thana)}
+    slot = next(s for s in booked if s["id"] in mine)
+    t = datetime.fromisoformat(slot["starts_at"]) + timedelta(hours=2)
+    r = client.patch(f"{API}/slots/{slot['id']}", headers=sureeporn,
+                     json={"starts_at": t.isoformat(), "ends_at": (t + timedelta(minutes=30)).isoformat()})
+    assert r.status_code == 409 and code(r) == "slot_booked_time"
+    before = client.get(f"{API}/notifications", headers=thana).json()["unread"]
+    ok = client.patch(f"{API}/slots/{slot['id']}", headers=sureeporn, json={"mode": "onsite", "location": "ห้องใหม่"})
+    assert ok.status_code == 200 and ok.json()["location"] == "ห้องใหม่"
+    assert client.get(f"{API}/notifications", headers=thana).json()["unread"] == before + 1
+
+
+def test_student_fixes_the_topic_until_it_starts(client, thana, pimlada, sureeporn, mali):
+    appt = upcoming(client, thana)[0]
+    r = client.patch(f"{API}/appointments/{appt['id']}", headers=thana, json={"topic": "  หัวข้อที่แก้แล้ว  "})
+    assert r.status_code == 200 and r.json()["topic"] == "หัวข้อที่แก้แล้ว"
+    assert client.get(f"{API}/appointments/{appt['id']}", headers=sureeporn).json()["topic"] == "หัวข้อที่แก้แล้ว"
+    assert client.patch(f"{API}/appointments/{appt['id']}", headers=pimlada, json={"topic": "x"}).status_code == 404
+    assert client.patch(f"{API}/appointments/{appt['id']}", headers=sureeporn, json={"topic": "x"}).status_code == 403
+    assert client.patch(f"{API}/appointments/{appt['id']}", headers=thana, json={"topic": " "}).status_code == 422
+    past = client.get(f"{API}/appointments", params={"view": "past"}, headers=thana).json()["items"]
+    done = next(a for a in past if a["status"] == "completed")
+    r = client.patch(f"{API}/appointments/{done['id']}", headers=thana, json={"topic": "x"})
+    assert r.status_code == 409 and code(r) == "not_editable"

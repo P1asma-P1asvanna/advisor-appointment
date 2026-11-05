@@ -24,6 +24,7 @@ export default function UsersPage() {
   const [role, setRole] = useState<Role | "all">("all");
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<ManagedUser | null>(null);
   const [resetting, setResetting] = useState<ManagedUser | null>(null);
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
   const list = useLoad(() => api.users({ role: role === "all" ? undefined : role, q: q.trim() || undefined }), [role, q]);
@@ -43,7 +44,7 @@ export default function UsersPage() {
 
   return (
     <>
-      <PageHeader title="จัดการผู้ใช้" sub="เพิ่มบัญชี ปิดบัญชี และรีเซ็ตรหัสผ่าน (ไม่มีการลบ เพื่อให้ประวัติการนัดยังอยู่)"
+      <PageHeader title="จัดการผู้ใช้" sub="เพิ่มบัญชี แก้ข้อมูล ปิดบัญชี และรีเซ็ตรหัสผ่าน (ไม่มีการลบ เพื่อให้ประวัติการนัดยังอยู่)"
         actions={<><button className="btn primary" onClick={() => setAdding(true)}>+ เพิ่มผู้ใช้</button></>} />
       <div className="filters">
         <Tabs<Role | "all"> value={role} onChange={setRole} items={[["all", "ทั้งหมด"], ["student", "นักศึกษา"], ["advisor", "อาจารย์"], ["admin", "เจ้าหน้าที่"]]} />
@@ -69,10 +70,13 @@ export default function UsersPage() {
                     {u.must_change_password && <Badge tone="amber">รอตั้งรหัสใหม่</Badge>}
                   </td>
                   <td>
-                    {u.id !== me?.id && (
+                    {(
                       <div className="row">
+                        <button className="btn sm" onClick={() => setEditing(u)}>แก้ไข</button>
+                    {u.id !== me?.id && (<>
                         <button className="btn sm" onClick={() => setResetting(u)}>รีเซ็ตรหัสผ่าน</button>
                         <button className="btn sm" onClick={() => toggle(u)}>{u.is_active ? "ปิดบัญชี" : "เปิดบัญชี"}</button>
+                    </>)}
                       </div>
                     )}
                   </td>
@@ -83,6 +87,7 @@ export default function UsersPage() {
         </div>}
 
       {adding && <AddUserModal onClose={() => setAdding(false)} onCreated={(email, password) => { setAdding(false); setCreated({ email, password }); list.reload(); }} />}
+      {editing && <EditUserModal user={editing} isSelf={editing.id === me?.id} onClose={() => setEditing(null)} onDone={() => { setEditing(null); list.reload(); }} />}
       {resetting && <ResetModal user={resetting} onClose={() => setResetting(null)} onDone={(email, password) => { setResetting(null); setCreated({ email, password }); list.reload(); }} />}
       {created && (
         <Modal title="ส่งรหัสผ่านชั่วคราวให้ผู้ใช้" onClose={() => setCreated(null)}>
@@ -178,6 +183,61 @@ function ResetModal({ user, onClose, onDone }: { user: ManagedUser; onClose(): v
         <div className="row end">
           <button type="button" className="btn" onClick={onClose}>ยกเลิก</button>
           <button className="btn primary" disabled={busy}>รีเซ็ตรหัสผ่าน</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditUserModal({ user, isSelf, onClose, onDone }: { user: ManagedUser; isSelf: boolean; onClose(): void; onDone(): void }) {
+  const toast = useToast();
+  const [name, setName] = useState(user.full_name);
+  const [email, setEmail] = useState(user.email);
+  const [role, setRole] = useState<Role>(user.role);
+  const [dept, setDept] = useState(user.department ?? "");
+  const [busy, setBusy] = useState(false);
+  const emailChanged = email.trim().toLowerCase() !== user.email;
+  const roleChanged = role !== user.role;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const patch: { full_name?: string; email?: string; role?: Role; department?: string } = {};
+    if (name.trim() !== user.full_name) patch.full_name = name.trim();
+    if (emailChanged) patch.email = email.trim();
+    if (roleChanged) patch.role = role;
+    if (dept.trim() !== (user.department ?? "")) patch.department = dept.trim();
+    if (Object.keys(patch).length === 0) return onClose();
+    if ((emailChanged || roleChanged) && !window.confirm("การแก้อีเมลหรือบทบาทจะทำให้ " + user.full_name + " ถูกออกจากระบบทุกอุปกรณ์ และต้องเข้าสู่ระบบใหม่ ยืนยันหรือไม่?")) return;
+    setBusy(true);
+    try {
+      await api.updateUser(user.id, patch);
+      toast.ok("บันทึกแล้ว");
+      onDone();
+    } catch (err) {
+      toast.fail(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`แก้ไขข้อมูล: ${user.full_name}`} onClose={onClose}>
+      <form onSubmit={submit}>
+        <label className="field"><span>ชื่อ-นามสกุล</span><input required value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label className="field"><span>อีเมล (ใช้ล็อกอิน)</span>
+          <input type="email" required disabled={isSelf} value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label className="field"><span>บทบาท</span>
+          <select disabled={isSelf} value={role} onChange={(e) => setRole(e.target.value as Role)}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_TH[r]}</option>)}</select>
+        </label>
+        <label className="field"><span>ภาควิชา{role === "admin" ? " (ไม่บังคับ)" : ""}</span>
+          <input required={role !== "admin"} value={dept} onChange={(e) => setDept(e.target.value)} />
+        </label>
+        {isSelf && <p className="muted">อีเมลและบทบาทของตัวเองแก้ไม่ได้ ให้เจ้าหน้าที่คนอื่นแก้ให้</p>}
+        {!isSelf && <p className="muted">เปลี่ยนบทบาทได้ต่อเมื่อไม่มีนัดหรือช่องเวลาว่างค้างอยู่ ภาควิชาต้องสะกดให้ตรงกันเพราะใช้กรองในหน้าจองนัด</p>}
+        <div className="row end">
+          <button type="button" className="btn" onClick={onClose}>ยกเลิก</button>
+          <button className="btn primary" disabled={busy}>บันทึก</button>
         </div>
       </form>
     </Modal>

@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/endpoints";
+import { tokenStore } from "../../api/client";
 import { homeFor, useAuth } from "../../auth/AuthContext";
 import { PageHeader } from "../../components/ui";
 import { useToast } from "../../components/Toast";
@@ -14,7 +15,21 @@ export default function AccountPage() {
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editName, setEditName] = useState(false);
+  const [name, setName] = useState(user?.full_name ?? "");
   if (!user) return null;
+
+  async function saveName(e: FormEvent) {
+    e.preventDefault();
+    try {
+      const u = await api.updateMe(name.trim());
+      setSession(tokenStore.get() ?? "", u);
+      toast.ok("บันทึกชื่อแล้ว");
+      setEditName(false);
+    } catch (err) {
+      toast.fail(err);
+    }
+  }
 
   const mismatch = again !== "" && next !== again;
   const tooShort = next !== "" && next.length < 8;
@@ -42,9 +57,21 @@ export default function AccountPage() {
         <div className="notice warn">บัญชีของคุณเพิ่งถูกสร้างหรือถูกรีเซ็ตรหัสผ่าน กรุณาตั้งรหัสผ่านใหม่ของคุณเองก่อนเริ่มใช้งาน</div>
       )}
       <dl className="facts panel">
-        <dt>ชื่อ</dt><dd>{user.full_name}</dd>
+        <dt>ชื่อ</dt>
+        <dd>
+          {editName ? (
+            <form className="row wrap" onSubmit={saveName}>
+              <input required value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+              <button className="btn sm primary">บันทึก</button>
+              <button type="button" className="btn sm" onClick={() => { setName(user.full_name); setEditName(false); }}>ยกเลิก</button>
+            </form>
+          ) : (
+            <>{user.full_name}{" "}{!user.must_change_password && <button className="btn sm" onClick={() => setEditName(true)}>แก้ไขชื่อ</button>}</>
+          )}
+        </dd>
         <dt>อีเมล</dt><dd>{user.email}</dd>
         <dt>บทบาท</dt><dd>{ROLE_TH[user.role]}{user.department ? " · " + user.department : ""}</dd>
+        <dt></dt><dd className="muted">อีเมล บทบาท และภาควิชา แก้ได้โดยเจ้าหน้าที่ภาควิชาเท่านั้น</dd>
       </dl>
 
       <h2>เปลี่ยนรหัสผ่าน</h2>
