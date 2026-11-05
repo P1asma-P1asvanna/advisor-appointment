@@ -1,6 +1,6 @@
 import { get, patch, post, put } from "./client";
 import type {
-  AdvisorRef, AppNotification, Appointment, AppointmentDetail, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
+  AdvisorRef, AuditItem, AppNotification, Appointment, AppointmentDetail, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
   Role, Slot, Task, TaskStatus, User, Visibility,
 } from "./types";
 
@@ -8,6 +8,9 @@ export const api = {
   login: (email: string, password: string, role?: Role) => post<LoginResult>("/auth/login", { email, password, role }),
   me: () => get<User>("/me"),
   updateMe: (full_name: string) => patch<User>("/me", { full_name }),
+  features: () => get<{ password_reset: boolean }>("/auth/features"),
+  forgotPassword: (email: string) => post<{ ok: boolean }>("/auth/forgot-password", { email }),
+  resetPassword: (token: string, new_password: string) => post<{ ok: boolean }>("/auth/reset-password", { token, new_password }),
   changePassword: (current_password: string, new_password: string) =>
     post<LoginResult>("/auth/change-password", { current_password, new_password }),
 
@@ -16,11 +19,12 @@ export const api = {
     post<ManagedUser>("/admin/users", b),
   updateUser: (id: string, b: { full_name?: string; department?: string; is_active?: boolean; email?: string; role?: Role }) =>
     patch<ManagedUser>(`/admin/users/${id}`, b),
-  resetPassword: (id: string, password: string) => post<{ ok: boolean }>(`/admin/users/${id}/reset-password`, { password }),
+  adminResetPassword: (id: string, password: string) => post<{ ok: boolean }>(`/admin/users/${id}/reset-password`, { password }),
   advisors: (department?: string) => get<{ items: AdvisorRef[] }>("/advisors", { department }),
 
   slots: (q: { advisor_id?: string; department?: string; status?: string; from_date?: string; to_date?: string } = {}) =>
     get<{ items: Slot[] }>("/slots", q),
+  audit: (q?: string) => get<{ items: AuditItem[] }>("/admin/audit", { q }),
   createSlot: (b: { starts_at: string; ends_at: string; mode: Mode; location?: string; meeting_url?: string }) =>
     post<Slot>("/slots", b),
   updateSlot: (id: string, b: { starts_at?: string; ends_at?: string; mode?: Mode; location?: string; meeting_url?: string }) =>

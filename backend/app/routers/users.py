@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from .. import throttle
+from .. import audit, throttle
 from ..db import get_conn, many, one, run
 from ..deps import require_roles
 from ..errors import ApiError
@@ -46,15 +46,18 @@ def list_users(
 @router.post("", status_code=201)
 def create_user(body: UserIn, user=Depends(require_roles("admin")), conn=Depends(get_conn)):
     """Create an account with a temporary password. The person must choose their own at first sign-in."""
-    return one(
-        conn,
-        f"""
-        INSERT INTO users (email, full_name, role, department, password_hash, must_change_password)
-        VALUES (%(email)s, %(full_name)s, %(role)s, %(department)s, %(hash)s, true)
-        RETURNING {COLUMNS}
-        """,
-        {**body.model_dump(exclude={"password"}), "hash": hash_password(body.password)},
-    )
+    with conn.transaction():
+        created = one(
+            conn,
+            f"""
+            INSERT INTO users (email, full_name, role, department, password_hash, must_change_password)
+            VALUES (%(email)s, %(full_name)s, %(role)s, %(department)s, %(hash)s, true)
+            RETURNING {COLUMNS}
+            """,
+            {**body.model_dump(exclude={"password"}), "hash": hash_password(body.password)},
+        )
+        audit.log(conn, user, "user.create", created, {"role": created["role"], "department": created["department"]})
+    return created
 
 
 def _other_user(conn, user_id: UUID, me: dict) -> dict:
@@ -131,6 +134,9 @@ def update_user(user_id: UUID, body: UserPatch, me=Depends(require_roles("admin"
                 "UPDATE availability_slots SET status = 'cancelled' WHERE advisor_id = %(id)s AND status = 'open'",
                 {"id": user_id},
             )
+        changes = {k: {"from": target[k], "to": row[k]} for k in ("full_name", "department", "email", "role", "is_active") if target[k] != row[k]}
+        if changes:
+            audit.log(conn, me, "user.update", row, changes)
     return row
 
 
@@ -149,4 +155,5 @@ def reset_password(user_id: UUID, body: ResetPasswordIn, me=Depends(require_role
             {"h": hash_password(body.password), "now": datetime.now(timezone.utc), "id": user_id},
         )
         throttle.clear(conn, target["email"].lower())
+        audit.log(conn, me, "user.reset_password", target)
     return {"ok": True}

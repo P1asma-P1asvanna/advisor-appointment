@@ -154,3 +154,12 @@ export interface Overview {
   advisors: AdvisorStat[];
   watchlist: { id: string; full_name: string; no_shows: number; overdue_tasks: number }[];
 }
+
+export interface AuditItem {
+  id: number;
+  at: string;
+  actor_email: string | null; // null = the system or the person themselves via an emailed link
+  action: string;
+  target_email: string | null;
+  details: Record<string, unknown> | null;
+}

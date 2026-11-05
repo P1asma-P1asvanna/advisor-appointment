@@ -184,3 +184,12 @@ class ChangePasswordIn(BaseModel):
         if self.new_password == self.current_password:
             raise ValueError("the new password must be different")
         return self
+
+
+class ForgotIn(BaseModel):
+    email: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, min_length=3, max_length=254)]
+
+
+class ResetIn(BaseModel):
+    token: Annotated[str, StringConstraints(min_length=20, max_length=200)]
+    new_password: Password

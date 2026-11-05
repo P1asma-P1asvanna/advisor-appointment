@@ -1,7 +1,7 @@
 """Create the first admin on an empty database from BOOTSTRAP_ADMIN_* environment variables."""
 import logging
 
-from . import config
+from . import audit, config
 from .db import one
 from .security import hash_password
 
@@ -24,5 +24,6 @@ def ensure_admin(conn) -> bool:
     if created is None:
         log.error("BOOTSTRAP_ADMIN_EMAIL %s already belongs to a non-admin account; no admin was created", config.BOOTSTRAP_ADMIN_EMAIL)
         return False
+    audit.log(conn, None, "admin.bootstrap", {"id": created["id"], "email": config.BOOTSTRAP_ADMIN_EMAIL})
     log.warning("created the first admin %s; they must change the password at first sign-in", config.BOOTSTRAP_ADMIN_EMAIL)
     return True

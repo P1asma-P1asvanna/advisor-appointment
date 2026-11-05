@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends
 
+import json
+
+from .. import audit
 from ..db import get_conn, many, one
 from ..deps import current_user, require_roles
 from ..schemas import PolicyIn
@@ -25,6 +28,13 @@ def effective_policy(department: str | None = None, user=Depends(current_user), 
 @router.put("/admin/policy")
 def save_policy(body: PolicyIn, user=Depends(require_roles("admin")), conn=Depends(get_conn)):
     """Set the rules for one department, or for all of them with department='*'."""
+    with conn.transaction():
+        saved = _save_policy(conn, body, user)
+        audit.log(conn, user, "policy.update", None, body.model_dump())
+    return saved
+
+
+def _save_policy(conn, body, user):
     return one(
         conn,
         """
@@ -118,3 +128,22 @@ def send_reminders(user=Depends(require_roles("admin")), conn=Depends(get_conn))
     scheduler, or `SELECT send_reminders();` straight in psql)."""
     row = one(conn, "SELECT send_reminders() AS created")
     return {"created": row["created"]}
+
+
+@router.get("/admin/audit")
+def audit_trail(q: str | None = None, limit: int = 200, user=Depends(require_roles("admin")), conn=Depends(get_conn)):
+    """Newest first. `q` matches part of an action or of the actor's or the target's email."""
+    rows = many(
+        conn,
+        """
+        SELECT id, at, actor_email, action, target_email, details FROM audit_log
+        WHERE %(q)s::text IS NULL OR action ILIKE '%%' || %(q)s::text || '%%'
+           OR actor_email ILIKE '%%' || %(q)s::text || '%%' OR target_email ILIKE '%%' || %(q)s::text || '%%'
+        ORDER BY at DESC, id DESC
+        LIMIT %(limit)s
+        """,
+        {"q": (q or "").strip() or None, "limit": max(1, min(limit, 500))},
+    )
+    for r in rows:
+        r["details"] = json.loads(r["details"]) if r["details"] else None
+    return {"items": rows}

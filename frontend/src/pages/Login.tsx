@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { homeFor, useAuth } from "../auth/AuthContext";
 import type { Role } from "../api/types";
 import { ROLE_TH } from "../lib/labels";
@@ -44,6 +44,7 @@ export default function Login() {
         </label>
         {error && <div className="form-error" role="alert">{error}</div>}
         <button className="btn primary block" disabled={busy}>{busy ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}</button>
+        <p className="center"><Link to="/forgot-password">ลืมรหัสผ่าน?</Link></p>
       </form>
     </div>
   );

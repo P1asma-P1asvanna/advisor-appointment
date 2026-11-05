@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/endpoints";
-import type { Appointment } from "../../api/types";
+import type { Appointment, Slot } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { ApptBadge, Empty, ErrorBox, Loading, PageHeader, Where } from "../../components/ui";
 import { dayKey, dayLabel, range, timeLabel } from "../../lib/format";
@@ -32,6 +32,8 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(tm - 1);
   const [selected, setSelected] = useState(today);
   const list = useLoad(() => api.appointments("all"), []);
+  // Advisors also see the time they have opened but nobody has booked yet.
+  const openSlots = useLoad(() => (isAdvisor ? api.slots({ status: "open", from_date: today }) : Promise.resolve({ items: [] as Slot[] })), [isAdvisor]);
 
   const byDay = useMemo(() => {
     const m = new Map<string, Appointment[]>();
@@ -43,6 +45,17 @@ export default function CalendarPage() {
     for (const arr of m.values()) arr.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     return m;
   }, [list.data]);
+
+  const openByDay = useMemo(() => {
+    const m = new Map<string, Slot[]>();
+    for (const sl of openSlots.data?.items ?? []) {
+      if (sl.status !== "open") continue;
+      const k = dayKey(sl.starts_at);
+      (m.get(k) ?? m.set(k, []).get(k)!).push(sl);
+    }
+    for (const arr of m.values()) arr.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    return m;
+  }, [openSlots.data]);
 
   function go(delta: number) {
     const d = new Date(Date.UTC(year, month + delta, 1));
@@ -56,6 +69,7 @@ export default function CalendarPage() {
   }
 
   const dayItems = byDay.get(selected) ?? [];
+  const dayOpen = openByDay.get(selected) ?? [];
   return (
     <>
       <PageHeader title="ปฏิทิน" sub={isAdvisor ? "นัดที่นักศึกษาจองเข้าพบ ดูเป็นรายเดือน" : "นัดของคุณ ดูเป็นรายเดือน"} />
@@ -72,6 +86,7 @@ export default function CalendarPage() {
             {monthGrid(year, month).map((k, i) => {
               if (!k) return <div key={i} className="cal-cell blank" />;
               const items = byDay.get(k) ?? [];
+              const opens = openByDay.get(k) ?? [];
               const cls = "cal-cell" + (k === today ? " today" : "") + (k === selected ? " sel" : "");
               return (
                 <button key={k} className={cls} onClick={() => setSelected(k)} aria-label={`${Number(k.slice(8))} มีนัด ${items.length} รายการ`}>
@@ -81,15 +96,19 @@ export default function CalendarPage() {
                       {timeLabel(a.starts_at)} {isAdvisor ? a.student.name : a.advisor.name}
                     </span>
                   ))}
-                  {items.length > 2 && <span className="cal-more">+{items.length - 2}</span>}
+                  {opens.slice(0, Math.max(0, 2 - items.length)).map((sl) => (
+                    <span key={sl.id} className="cal-chip open">{timeLabel(sl.starts_at)} ว่าง</span>
+                  ))}
+                  {items.length + opens.length > 2 && <span className="cal-more">+{items.length + opens.length - 2}</span>}
                   {items.length > 0 && <span className="cal-dot">{items.length}</span>}
+                  {opens.length > 0 && <span className="cal-dot open" title="ช่องว่าง">{opens.length}</span>}
                 </button>
               );
             })}
           </div>
 
           <h2>{dayLabel(selected + "T12:00:00+07:00")}</h2>
-          {dayItems.length === 0 ? <Empty title="ไม่มีนัดในวันนี้" hint={!isAdvisor ? "ไปที่เมนู จองนัดหมาย เพื่อเลือกเวลา" : undefined} /> : (
+          {dayItems.length === 0 && dayOpen.length === 0 ? <Empty title="ไม่มีนัดในวันนี้" hint={!isAdvisor ? "ไปที่เมนู จองนัดหมาย เพื่อเลือกเวลา" : undefined} /> : (
             <div className="list">
               {dayItems.map((a) => (
                 <div key={a.id} className="appt">
@@ -104,6 +123,22 @@ export default function CalendarPage() {
                 </div>
               ))}
             </div>
+          )}
+          {dayOpen.length > 0 && (
+            <>
+              <h3>ช่องเวลาว่าง (ยังไม่มีคนจอง)</h3>
+              <div className="list">
+                {dayOpen.map((sl) => (
+                  <div key={sl.id} className="appt">
+                    <div className="appt-main">
+                      <strong>{range(sl.starts_at, sl.ends_at)}</strong>
+                      <div className="muted"><Where mode={sl.mode} location={sl.location} url={sl.meeting_url} /></div>
+                    </div>
+                    <Link className="btn sm" to="/slots">แก้ไขที่หน้าเวลาว่างของฉัน</Link>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </>
       )}

@@ -13,7 +13,7 @@ API สำหรับระบบนัดหมายอาจารย์/ภ
 pip install -r requirements.txt
 createdb advisor
 export DATABASE_URL=postgresql://localhost/advisor APP_ENV=dev
-./scripts/init_db.sh --seed          # schema.sql -> schema_v2.sql -> schema_v3.sql -> schema_v4.sql -> seed.sql (ข้อมูลตัวอย่าง)
+./scripts/init_db.sh --seed          # schema.sql -> schema_v2.sql -> schema_v3.sql -> schema_v4.sql -> schema_v5.sql -> seed.sql (ข้อมูลตัวอย่าง)
 uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 ```
 
@@ -35,6 +35,7 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `CORS_ORIGINS` | ต้นทางของหน้าเว็บ คั่นด้วยจุลภาค เช่น `https://app.example.edu` |
 | `DB_POOL_MAX` | จำนวน connection สูงสุดใน pool ค่าเริ่มต้น 10 |
 | `LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_MINUTES` | ใส่รหัสผิดได้กี่ครั้งต่ออีเมลในกี่นาทีก่อนถูกล็อกชั่วคราว ค่าเริ่มต้น 5 ครั้ง / 15 นาที |
+| `BREVO_API_KEY`, `MAIL_FROM_EMAIL`, `APP_URL` | เปิดระบบลืมรหัสผ่านทางอีเมล (ใช้ Brevo ผ่าน HTTPS ครบทั้ง 3 ตัวถึงจะเปิด) `MAIL_FROM_EMAIL` ต้องเป็นอีเมลที่ยืนยันกับ Brevo แล้ว `APP_URL` คือที่อยู่เว็บหน้าบ้าน เช่น `https://xxx.vercel.app` (ไม่ต้องมี / ท้าย) ตัวเลือก: `MAIL_FROM_NAME`, `RESET_TOKEN_MINUTES` (30), `RESET_MAX_PER_HOUR` (3) |
 | `BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` / `_NAME` | สร้างเจ้าหน้าที่คนแรกตอนเริ่มระบบ **เฉพาะเมื่อยังไม่มี admin เลย** (รหัสผ่านอย่างน้อย 8 ตัว ต้องเปลี่ยนตอนล็อกอินครั้งแรก) ตั้งเสร็จแล้วควรลบตัวแปรรหัสผ่านออก |
 
 ## การยืนยันตัวตนและรูปแบบ error
@@ -74,6 +75,9 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 |---|---|---|---|
 | `GET` | `/health` | ทุกคน | ตรวจว่าระบบพร้อม |
 | `POST` | `/api/v1/auth/login` | ทุกคน | เข้าสู่ระบบ |
+| `GET` | `/api/v1/auth/features` | ทุกคน | บอกว่าเปิดระบบลืมรหัสผ่านทางอีเมลหรือยัง |
+| `POST` | `/api/v1/auth/forgot-password` | ทุกคน | ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล (ตอบเหมือนกันเสมอ ไม่บอกว่ามีอีเมลนี้หรือไม่, สูงสุด 3 ครั้ง/ชม./บัญชี) |
+| `POST` | `/api/v1/auth/reset-password` | ทุกคน | ตั้งรหัสใหม่ด้วย token จากอีเมล (ใช้ได้ครั้งเดียว ภายใน 30 นาที ออกจากระบบทุกอุปกรณ์) |
 | `GET` | `/api/v1/me` | ผู้ที่ login | บัตรผู้ใช้ที่เมนูซ้าย |
 | `PATCH` | `/api/v1/me` | ผู้ที่ login | แก้ชื่อของตัวเอง (อีเมล/บทบาท/ภาควิชาแก้ไม่ได้) |
 | `GET` | `/api/v1/advisors` | ผู้ที่ login | ตัวกรองภาควิชาในหน้าจองนัด |
@@ -102,6 +106,7 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `POST` | `/api/v1/auth/change-password` | ผู้ที่ login | บัญชีของฉัน: เปลี่ยนรหัสผ่าน (ได้ token ใหม่กลับมา) |
 | `GET` | `/api/v1/admin/users` | เจ้าหน้าที่ | รายชื่อผู้ใช้ (กรองบทบาท/ค้นหา) |
 | `POST` | `/api/v1/admin/users` | เจ้าหน้าที่ | เพิ่มผู้ใช้พร้อมรหัสผ่านชั่วคราว |
+| `GET` | `/api/v1/admin/audit` | เจ้าหน้าที่ | ประวัติการแก้ไขข้อมูลสำคัญ (ค้นด้วย `q`) |
 | `PATCH` | `/api/v1/admin/users/{user_id}` | เจ้าหน้าที่ | แก้ชื่อ/ภาควิชา/**อีเมล/บทบาท**, ปิดหรือเปิดบัญชี (แก้อีเมลหรือบทบาทแล้วผู้นั้นถูกออกจากระบบ; เปลี่ยนบทบาทไม่ได้ถ้ามีนัดหรือช่องว่างค้าง; แก้อีเมล/บทบาทของตัวเองไม่ได้) |
 | `POST` | `/api/v1/admin/users/{user_id}/reset-password` | เจ้าหน้าที่ | รีเซ็ตรหัสผ่านเป็นรหัสชั่วคราว |
 
@@ -129,6 +134,8 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 - เปลี่ยนหรือรีเซ็ตรหัสผ่านแล้ว token เก่าทุกอันใช้ไม่ได้ทันที
 - ล็อกอินผิดเกินกำหนดจะล็อกอีเมลนั้นชั่วคราว (นับทั้งอีเมลที่ไม่มีในระบบ เพื่อไม่บอกว่ามีบัญชีหรือไม่) ข้อแลกเปลี่ยนคือคนอื่นอาจตั้งใจใส่รหัสผิดเพื่อล็อกบัญชีเราได้ชั่วคราว แอดมินปลดล็อกได้ด้วยการรีเซ็ตรหัสผ่าน
 
+`schema_v5.sql` เพิ่มตาราง `password_resets` (เก็บเฉพาะ SHA-256 ของ token) และ `audit_log` (ประวัติการแก้ไข ไม่มี foreign key เพื่อให้ประวัติอยู่ต่อแม้บัญชีเปลี่ยนไป และไม่เก็บรหัสผ่านหรือ token) ใช้ซ้ำได้
+
 `sql/clear_demo_data.sql` ล้างข้อมูลตัวอย่างทั้งหมด (ผู้ใช้ นัด บันทึก งาน แจ้งเตือน) แล้วคืนกติกาเป็นค่าเริ่มต้น ใช้ครั้งเดียวก่อนให้ผู้ใช้จริงเข้า
 
 เพิ่มผู้ใช้: ใช้หน้า "จัดการผู้ใช้" ของเจ้าหน้าที่ (หรือ `POST /admin/users`) ส่วนเจ้าหน้าที่คนแรกใช้ `BOOTSTRAP_ADMIN_*` ถ้าจำเป็นต้องสร้างด้วยมือ ให้สร้าง hash ด้วย `python -m app.security 'รหัสผ่าน'` แล้วใส่ในคอลัมน์ `password_hash` (รูปแบบ scrypt จาก standard library ไม่ต้องติดตั้งเพิ่ม)
@@ -138,7 +145,7 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 ```bash
 pytest                                                    # 14 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
 createdb advisor_test
-TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 56 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
+TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 65 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
 ```
 
 ชื่อฐานข้อมูลทดสอบต้องลงท้ายด้วย `_test` ชุดทดสอบจะล้างและสร้างตารางใหม่ทุกครั้ง และโหลด `seed.sql` ก่อนทุกเทสต์
@@ -147,7 +154,7 @@ TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 56 ข้อ HT
 
 ตรวจแล้ว (รันจริง):
 - `schema_v3.sql` และฟังก์ชันทั้งหมดบน PostgreSQL 16 รวมถึงการจองพร้อมกันสองเซสชัน
-- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 70 ข้อ
+- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 79 ข้อ
 - `schema_v4.sql` ใช้ซ้ำได้ (idempotent) และลองใช้ทับฐานข้อมูลที่มีข้อมูลตัวอย่างอยู่แล้ว แล้วรัน `clear_demo_data.sql` ตามด้วย
 
 ส่วนที่ผูกกับ FastAPI/psycopg จริง (routing, dependency, pool) ตรวจผ่าน CI บน GitHub และใช้งานจริงบน Render แล้วสำหรับ endpoint ชุดแรก

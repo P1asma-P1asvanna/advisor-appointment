@@ -161,7 +161,7 @@ function ResetModal({ user, onClose, onDone }: { user: ManagedUser; onClose(): v
     e.preventDefault();
     setBusy(true);
     try {
-      await api.resetPassword(user.id, password);
+      await api.adminResetPassword(user.id, password);
       onDone(user.email, password);
     } catch (err) {
       toast.fail(err);

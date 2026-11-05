@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${DATABASE_URL:?set DATABASE_URL first}"
 
-for f in sql/schema.sql sql/schema_v2.sql sql/schema_v3.sql sql/schema_v4.sql; do
+for f in sql/schema.sql sql/schema_v2.sql sql/schema_v3.sql sql/schema_v4.sql sql/schema_v5.sql; do
   echo "applying $f"
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$f"
 done

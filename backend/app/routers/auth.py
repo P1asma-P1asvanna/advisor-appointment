@@ -1,12 +1,14 @@
+import hashlib
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from .. import config, throttle
+from .. import audit, config, mailer, throttle
 from ..db import get_conn, many, one, run
 from ..deps import current_user, current_user_even_if_password_unchanged, public_user
 from ..errors import ApiError
-from ..schemas import ChangePasswordIn, LoginIn, ProfilePatch
+from ..schemas import ChangePasswordIn, ForgotIn, LoginIn, ProfilePatch, ResetIn
 from ..security import DUMMY_HASH, create_token, hash_password, verify_password
 
 router = APIRouter(tags=["auth"])
@@ -71,6 +73,70 @@ def change_password(
     )
     throttle.clear(conn, user["email"])
     return _session(row)
+
+
+@router.get("/auth/features")
+def features():
+    """What the sign-in page may offer. Reset by email exists only when mail is configured."""
+    return {"password_reset": mailer.enabled()}
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+@router.post("/auth/forgot-password")
+def forgot_password(body: ForgotIn, conn=Depends(get_conn)):
+    """Email a single-use reset link. The answer is always the same, so nobody can use this to find out
+    which emails have accounts. At most RESET_MAX_PER_HOUR links per account per hour."""
+    generic = {"ok": True}
+    if not mailer.enabled():
+        return generic
+    u = one(conn, "SELECT id, email, full_name FROM users WHERE email = %(e)s AND is_active", {"e": body.email})
+    if u is None:
+        return generic
+    recent = one(
+        conn,
+        "SELECT count(*) AS n FROM password_resets WHERE user_id = %(id)s AND created_at > now() - interval '1 hour'",
+        {"id": u["id"]},
+    )
+    if recent["n"] >= config.RESET_MAX_PER_HOUR:
+        return generic
+    token = secrets.token_urlsafe(32)
+    with conn.transaction():
+        run(conn, "UPDATE password_resets SET used_at = now() WHERE user_id = %(id)s AND used_at IS NULL", {"id": u["id"]})
+        run(
+            conn,
+            """INSERT INTO password_resets (user_id, token_hash, expires_at)
+               VALUES (%(id)s, %(h)s, now() + make_interval(mins => %(m)s))""",
+            {"id": u["id"], "h": _hash_token(token), "m": config.RESET_TOKEN_MINUTES},
+        )
+    mailer.send_reset_link(u, token)
+    return generic
+
+
+@router.post("/auth/reset-password")
+def reset_password(body: ResetIn, conn=Depends(get_conn)):
+    """Set a new password with the emailed token. Signs the person out everywhere and uses up every link."""
+    row = one(
+        conn,
+        """SELECT r.user_id AS id, u.email FROM password_resets r JOIN users u ON u.id = r.user_id
+           WHERE r.token_hash = %(h)s AND r.used_at IS NULL AND r.expires_at > now() AND u.is_active""",
+        {"h": _hash_token(body.token)},
+    )
+    if row is None:
+        raise ApiError(400, "invalid_or_expired_token", "ลิงก์นี้ใช้ไม่ได้หรือหมดอายุแล้ว กรุณาขอลิงก์ใหม่")
+    with conn.transaction():
+        run(
+            conn,
+            """UPDATE users SET password_hash = %(h)s, must_change_password = false, password_changed_at = %(now)s
+               WHERE id = %(id)s""",
+            {"h": hash_password(body.new_password), "now": datetime.now(timezone.utc), "id": row["id"]},
+        )
+        run(conn, "UPDATE password_resets SET used_at = now() WHERE user_id = %(id)s AND used_at IS NULL", {"id": row["id"]})
+        throttle.clear(conn, row["email"])
+        audit.log(conn, None, "user.password_reset_by_email", row)
+    return {"ok": True}
 
 
 @router.get("/me")

@@ -198,3 +198,8 @@ tr.off td { opacity: .55; }
   .cal-chip, .cal-more { display: none; }
   .cal-dot { display: inline-block; background: var(--brand); color: var(--brand-ink); border-radius: 99px; font-size: .7rem; min-width: 1.15rem; text-align: center; padding: 0 .3rem; }
 }
+
+.center { text-align: center; }
+.grow { flex: 1 1 14rem; min-width: 0; }
+.cal-chip.open { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
+.cal-dot.open { background: transparent; color: var(--muted); border: 1px dashed var(--line); }

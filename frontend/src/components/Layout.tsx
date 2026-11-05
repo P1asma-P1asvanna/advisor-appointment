@@ -8,7 +8,7 @@ import { ROLE_TH } from "../lib/labels";
 const NAV: Record<Role, [string, string][]> = {
   student: [["/book", "จองนัดหมาย"], ["/appointments", "นัดของฉัน"], ["/calendar", "ปฏิทิน"], ["/tasks", "งานติดตาม"], ["/notifications", "การแจ้งเตือน"]],
   advisor: [["/slots", "เวลาว่างของฉัน"], ["/appointments", "นัดหมาย"], ["/calendar", "ปฏิทิน"], ["/tasks", "งานที่มอบหมาย"], ["/notifications", "การแจ้งเตือน"]],
-  admin: [["/overview", "ภาพรวมภาควิชา"], ["/users", "จัดการผู้ใช้"], ["/policy", "กติกาการจอง"], ["/notifications", "การแจ้งเตือน"]],
+  admin: [["/overview", "ภาพรวมภาควิชา"], ["/users", "จัดการผู้ใช้"], ["/policy", "กติกาการจอง"], ["/audit", "ประวัติการแก้ไข"], ["/notifications", "การแจ้งเตือน"]],
 };
 
 export default function Layout() {

@@ -30,6 +30,16 @@ BOOTSTRAP_ADMIN_EMAIL = os.environ.get("BOOTSTRAP_ADMIN_EMAIL", "").strip().lowe
 BOOTSTRAP_ADMIN_PASSWORD = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
 BOOTSTRAP_ADMIN_NAME = os.environ.get("BOOTSTRAP_ADMIN_NAME", "ผู้ดูแลระบบ").strip() or "ผู้ดูแลระบบ"
 
+# Password reset by email. Needs a Brevo account (free: 300 emails a day), an API key and a verified sender address.
+# Without all of them the feature stays off and people ask an admin to reset their password instead.
+# Brevo is called over HTTPS because free hosts such as Render block SMTP ports.
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
+MAIL_FROM_EMAIL = os.environ.get("MAIL_FROM_EMAIL", "").strip()
+MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "นัดหมายอาจารย์").strip() or "นัดหมายอาจารย์"
+APP_URL = os.environ.get("APP_URL", "").strip().rstrip("/")  # the website, e.g. https://advisor-appointment.vercel.app
+RESET_TOKEN_MINUTES = int(os.environ.get("RESET_TOKEN_MINUTES", "30"))
+RESET_MAX_PER_HOUR = int(os.environ.get("RESET_MAX_PER_HOUR", "3"))
+
 
 def validate() -> None:
     if len(JWT_SECRET) < 32:
@@ -39,3 +49,5 @@ def validate() -> None:
         )
     if BOOTSTRAP_ADMIN_EMAIL and len(BOOTSTRAP_ADMIN_PASSWORD) < 8:
         raise RuntimeError("BOOTSTRAP_ADMIN_PASSWORD must be at least 8 characters.")
+    if BREVO_API_KEY and not (MAIL_FROM_EMAIL and APP_URL.startswith("http")):
+        raise RuntimeError("BREVO_API_KEY needs MAIL_FROM_EMAIL and APP_URL (the website address, https://...) as well.")

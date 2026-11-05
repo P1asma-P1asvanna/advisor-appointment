@@ -271,3 +271,120 @@ def test_anyone_can_fix_their_own_name_only(client, thana):
     assert client.patch(f"{API}/me", headers=thana, json={"full_name": " "}).status_code == 422
     r = client.patch(f"{API}/me", headers=thana, json={"full_name": "ธนา", "role": "admin", "email": "a@b.co"})
     assert r.status_code == 200 and r.json()["role"] == "student" and r.json()["email"] == "thana@example.edu"
+
+
+# ------------------------------------------------------------ forgot password by email
+
+@pytest.fixture
+def outbox(monkeypatch):
+    """Turn email on and capture what would be sent."""
+    from app import config, mailer
+    monkeypatch.setattr(config, "BREVO_API_KEY", "test-key")
+    monkeypatch.setattr(config, "MAIL_FROM_EMAIL", "noreply@example.edu")
+    monkeypatch.setattr(config, "APP_URL", "https://app.example.edu")
+    sent = []
+    monkeypatch.setattr(mailer, "send", lambda to, name, subject, text: sent.append((to, text)) or True)
+    return sent
+
+
+def _token(text):
+    return text.split("token=")[1].split()[0]
+
+
+def test_features_reports_whether_email_is_set_up(client, outbox, monkeypatch):
+    assert client.get(f"{API}/auth/features").json() == {"password_reset": True}
+    from app import config
+    monkeypatch.setattr(config, "BREVO_API_KEY", "")
+    assert client.get(f"{API}/auth/features").json() == {"password_reset": False}
+
+
+def test_forgot_password_email_roundtrip(client, outbox):
+    r = client.post(f"{API}/auth/forgot-password", json={"email": " Thana@Example.edu "})
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert len(outbox) == 1 and outbox[0][0] == "thana@example.edu"
+    assert outbox[0][1].count("https://app.example.edu/reset-password?token=") == 1
+    token = _token(outbox[0][1])
+    old = login(client, "thana@example.edu")
+    assert old.status_code == 200
+    assert client.post(f"{API}/auth/reset-password", json={"token": token, "new_password": "short"}).status_code == 422
+    ok = client.post(f"{API}/auth/reset-password", json={"token": token, "new_password": "brand-new-pass"})
+    assert ok.status_code == 200
+    assert login(client, "thana@example.edu").status_code == 401                         # old password gone
+    fresh = login(client, "thana@example.edu", "brand-new-pass")
+    assert fresh.status_code == 200 and fresh.json()["user"]["must_change_password"] is False
+    assert client.get(f"{API}/me", headers=bearer(old.json()["access_token"])).status_code == 401  # old sessions end
+    again = client.post(f"{API}/auth/reset-password", json={"token": token, "new_password": "another-pass-1"})
+    assert again.status_code == 400 and code(again) == "invalid_or_expired_token"       # single use
+
+
+def test_forgot_password_never_reveals_which_emails_exist(client, outbox):
+    known = client.post(f"{API}/auth/forgot-password", json={"email": "thana@example.edu"})
+    unknown = client.post(f"{API}/auth/forgot-password", json={"email": "nobody@example.edu"})
+    assert known.status_code == unknown.status_code == 200 and known.json() == unknown.json()
+    assert [to for to, _ in outbox] == ["thana@example.edu"]
+
+
+def test_forgot_password_skips_disabled_accounts_and_limits_requests(client, mali, outbox):
+    uid = user_id(client, mali, "pimlada@example.edu")
+    assert client.patch(f"{ADMIN}/{uid}", headers=mali, json={"is_active": False}).status_code == 200
+    client.post(f"{API}/auth/forgot-password", json={"email": "pimlada@example.edu"})
+    assert outbox == []
+    for _ in range(5):
+        client.post(f"{API}/auth/forgot-password", json={"email": "thana@example.edu"})
+    assert len(outbox) == 3                                                              # RESET_MAX_PER_HOUR
+
+
+def test_a_new_link_replaces_the_old_one_and_links_expire(client, outbox):
+    from tests.conftest import _run_script
+    client.post(f"{API}/auth/forgot-password", json={"email": "thana@example.edu"})
+    client.post(f"{API}/auth/forgot-password", json={"email": "thana@example.edu"})
+    first, second = _token(outbox[0][1]), _token(outbox[1][1])
+    assert client.post(f"{API}/auth/reset-password", json={"token": first, "new_password": "brand-new-pass"}).status_code == 400
+    _run_script("UPDATE password_resets SET expires_at = now() - interval '1 minute'")
+    late = client.post(f"{API}/auth/reset-password", json={"token": second, "new_password": "brand-new-pass"})
+    assert late.status_code == 400 and code(late) == "invalid_or_expired_token"
+    assert client.post(f"{API}/auth/reset-password", json={"token": "x" * 30, "new_password": "brand-new-pass"}).status_code == 400
+
+
+def test_forgot_password_does_nothing_when_email_is_not_configured(client):
+    assert client.post(f"{API}/auth/forgot-password", json={"email": "thana@example.edu"}).json() == {"ok": True}
+
+
+def test_stored_reset_tokens_are_hashed(client, outbox):
+    from tests.conftest import _run_script  # noqa: F401
+    client.post(f"{API}/auth/forgot-password", json={"email": "thana@example.edu"})
+    token = _token(outbox[0][1])
+    import psycopg, os
+    with psycopg.connect(os.environ["TEST_DATABASE_URL"]) as c:
+        stored = [(next(iter(r.values())) if isinstance(r, dict) else r[0]) for r in c.execute("SELECT token_hash FROM password_resets").fetchall()]
+    assert stored and token not in stored and all(len(h) == 64 for h in stored)
+
+
+# ------------------------------------------------------------ audit trail
+
+def test_admin_changes_are_recorded_without_secrets(client, mali):
+    assert new_user(client, mali, email="audit.me@example.edu").status_code == 201
+    uid = user_id(client, mali, "audit.me@example.edu")
+    client.patch(f"{ADMIN}/{uid}", headers=mali, json={"full_name": "ชื่อใหม่", "email": "audit.new@example.edu"})
+    client.post(f"{ADMIN}/{uid}/reset-password", headers=mali, json={"password": "secret-temp-1"})
+    client.put(f"{API}/admin/policy", headers=mali, json={"department": "*", "min_notice_hours": 5, "cancel_before_hours": 6,
+                                                         "max_active_per_student": 3, "reminder_hours_before": 20})
+    items = client.get(f"{API}/admin/audit", headers=mali).json()["items"]
+    actions = [i["action"] for i in items]
+    assert actions[:4] == ["policy.update", "user.reset_password", "user.update", "user.create"]
+    upd = next(i for i in items if i["action"] == "user.update")
+    assert upd["actor_email"] == "mali@example.edu" and upd["target_email"] == "audit.new@example.edu"
+    assert upd["details"]["email"] == {"from": "audit.me@example.edu", "to": "audit.new@example.edu"}
+    assert "secret-temp-1" not in str(items) and "temp-pass-1" not in str(items)
+    found = client.get(f"{API}/admin/audit", headers=mali, params={"q": "audit.new"}).json()["items"]
+    assert found and all("audit.new" in (i["target_email"] or "") for i in found)
+    # nothing is recorded when nothing changed
+    n = len(items)
+    client.patch(f"{ADMIN}/{uid}", headers=mali, json={"full_name": "ชื่อใหม่"})
+    assert len(client.get(f"{API}/admin/audit", headers=mali).json()["items"]) == n
+
+
+def test_only_admins_read_the_audit_trail(client, thana, sureeporn):
+    assert client.get(f"{API}/admin/audit", headers=thana).status_code == 403
+    assert client.get(f"{API}/admin/audit", headers=sureeporn).status_code == 403
+    assert client.get(f"{API}/admin/audit").status_code == 401

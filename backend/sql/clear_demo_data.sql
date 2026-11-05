@@ -4,5 +4,5 @@
 -- BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD on the API (see README) and restarting it.
 
 TRUNCATE notifications, tasks, advising_notes, appointments, availability_slots,
-         login_attempts, booking_policies, users CASCADE;
+         login_attempts, password_resets, audit_log, booking_policies, users CASCADE;
 INSERT INTO booking_policies (department) VALUES ('*');

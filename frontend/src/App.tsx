@@ -5,6 +5,9 @@ import type { Role } from "./api/types";
 import Layout from "./components/Layout";
 import { Loading } from "./components/ui";
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import AuditPage from "./pages/admin/AuditPage";
 import BookPage from "./pages/student/BookPage";
 import SlotsPage from "./pages/advisor/SlotsPage";
 import AppointmentsPage from "./pages/shared/AppointmentsPage";
@@ -38,6 +41,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<Guard><Layout /></Guard>}>
         <Route path="/book" element={<Guard roles={["student"]}><BookPage /></Guard>} />
         <Route path="/slots" element={<Guard roles={["advisor"]}><SlotsPage /></Guard>} />
@@ -49,6 +54,7 @@ export default function App() {
         <Route path="/overview" element={<Guard roles={["admin"]}><OverviewPage /></Guard>} />
         <Route path="/users" element={<Guard roles={["admin"]}><UsersPage /></Guard>} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/audit" element={<Guard roles={["admin"]}><AuditPage /></Guard>} />
         <Route path="/policy" element={<Guard roles={["admin"]}><PolicyPage /></Guard>} />
       </Route>
       <Route path="*" element={<Home />} />
