@@ -99,6 +99,7 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 | `POST` | `/api/v1/auth/change-password` | ผู้ที่ login | บัญชีของฉัน: เปลี่ยนรหัสผ่าน (ได้ token ใหม่กลับมา) |
 | `GET` | `/api/v1/admin/users` | เจ้าหน้าที่ | รายชื่อผู้ใช้ (กรองบทบาท/ค้นหา) |
 | `POST` | `/api/v1/admin/users` | เจ้าหน้าที่ | เพิ่มผู้ใช้พร้อมรหัสผ่านชั่วคราว |
+| `POST` | `/api/v1/admin/users/import` | เจ้าหน้าที่ | นำเข้าผู้ใช้หลายคน (`dry_run` ตรวจก่อน, สูงสุด 300 แถว) |
 | `PATCH` | `/api/v1/admin/users/{user_id}` | เจ้าหน้าที่ | แก้ชื่อ/ภาควิชา, ปิดหรือเปิดบัญชี |
 | `POST` | `/api/v1/admin/users/{user_id}/reset-password` | เจ้าหน้าที่ | รีเซ็ตรหัสผ่านเป็นรหัสชั่วคราว |
 
@@ -128,14 +129,14 @@ uvicorn app.main:app --reload        # เปิด http://localhost:8000/docs
 
 `sql/clear_demo_data.sql` ล้างข้อมูลตัวอย่างทั้งหมด (ผู้ใช้ นัด บันทึก งาน แจ้งเตือน) แล้วคืนกติกาเป็นค่าเริ่มต้น ใช้ครั้งเดียวก่อนให้ผู้ใช้จริงเข้า
 
-เพิ่มผู้ใช้: ใช้หน้า "จัดการผู้ใช้" ของเจ้าหน้าที่ (หรือ `POST /admin/users`) ส่วนเจ้าหน้าที่คนแรกใช้ `BOOTSTRAP_ADMIN_*` ถ้าจำเป็นต้องสร้างด้วยมือ ให้สร้าง hash ด้วย `python -m app.security 'รหัสผ่าน'` แล้วใส่ในคอลัมน์ `password_hash` (รูปแบบ scrypt จาก standard library ไม่ต้องติดตั้งเพิ่ม)
+เพิ่มผู้ใช้: ใช้หน้า "จัดการผู้ใช้" ของเจ้าหน้าที่ (`POST /admin/users` ทีละคน หรือ `POST /admin/users/import` หลายคนจากไฟล์ CSV: ตรวจทีละแถว ข้ามแถวที่ผิด สุ่มรหัสชั่วคราวให้แถวที่ไม่มีรหัส และคืนรหัสกลับมาครั้งเดียว) ส่วนเจ้าหน้าที่คนแรกใช้ `BOOTSTRAP_ADMIN_*` ถ้าจำเป็นต้องสร้างด้วยมือ ให้สร้าง hash ด้วย `python -m app.security 'รหัสผ่าน'` แล้วใส่ในคอลัมน์ `password_hash` (รูปแบบ scrypt จาก standard library ไม่ต้องติดตั้งเพิ่ม)
 
 ## ทดสอบ
 
 ```bash
-pytest                                                    # 13 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
+pytest                                                    # 14 ข้อแรกไม่ต้องใช้ฐานข้อมูล ที่เหลือจะข้ามเองถ้าไม่ได้ตั้งตัวแปรถัดไป
 createdb advisor_test
-TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 49 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
+TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 53 ข้อ HTTP-level (ไฟล์ test_api.py, test_users.py)
 ```
 
 ชื่อฐานข้อมูลทดสอบต้องลงท้ายด้วย `_test` ชุดทดสอบจะล้างและสร้างตารางใหม่ทุกครั้ง และโหลด `seed.sql` ก่อนทุกเทสต์
@@ -144,10 +145,10 @@ TEST_DATABASE_URL=postgresql://localhost/advisor_test pytest   # 49 ข้อ HT
 
 ตรวจแล้ว (รันจริง):
 - `schema_v3.sql` และฟังก์ชันทั้งหมดบน PostgreSQL 16 รวมถึงการจองพร้อมกันสองเซสชัน
-- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 62 ข้อ
+- โค้ดของแอปทั้งหมดรันกับ PostgreSQL 16 จริง ผ่านเทสต์ 67 ข้อ
 - `schema_v4.sql` ใช้ซ้ำได้ (idempotent) และลองใช้ทับฐานข้อมูลที่มีข้อมูลตัวอย่างอยู่แล้ว แล้วรัน `clear_demo_data.sql` ตามด้วย
 
 ส่วนที่ผูกกับ FastAPI/psycopg จริง (routing, dependency, pool) ตรวจผ่าน CI บน GitHub และใช้งานจริงบน Render แล้วสำหรับ endpoint ชุดแรก
 ชุด `schema_v4` และ endpoint จัดการผู้ใช้ผ่านเทสต์กับตัวจำลองในเครื่องผู้พัฒนา ให้ดู CI ว่าเขียวกับไลบรารีจริงหลัง push
 
-ข้อจำกัดของ MVP: ยังไม่มีการนำเข้าผู้ใช้เป็นกลุ่ม (CSV), ไม่มีการลืมรหัสผ่านด้วยตัวเอง (ต้องให้เจ้าหน้าที่รีเซ็ต) และไม่มีการส่งอีเมล/LINE (การแจ้งเตือนเข้ากล่องในระบบ)
+ข้อจำกัดของ MVP: ไม่มีการลืมรหัสผ่านด้วยตัวเอง (ต้องให้เจ้าหน้าที่รีเซ็ต) และไม่มีการส่งอีเมล/LINE (การแจ้งเตือนเข้ากล่องในระบบ)

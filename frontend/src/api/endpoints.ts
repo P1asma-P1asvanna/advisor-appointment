@@ -1,6 +1,6 @@
 import { get, patch, post, put } from "./client";
 import type {
-  AdvisorRef, AppNotification, Appointment, AppointmentDetail, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
+  AdvisorRef, AppNotification, Appointment, AppointmentDetail, ImportResult, LoginResult, ManagedUser, Mode, Note, Overview, Policy,
   Role, Slot, Task, TaskStatus, User, Visibility,
 } from "./types";
 
@@ -13,6 +13,8 @@ export const api = {
   users: (q: { role?: Role; q?: string } = {}) => get<{ items: ManagedUser[] }>("/admin/users", q),
   createUser: (b: { email: string; full_name: string; role: Role; department?: string; password: string }) =>
     post<ManagedUser>("/admin/users", b),
+  importUsers: (rows: { email: string; full_name: string; role: string; department: string; password: string }[], dry_run: boolean) =>
+    post<ImportResult>("/admin/users/import", { rows, dry_run }),
   updateUser: (id: string, b: { full_name?: string; department?: string; is_active?: boolean }) =>
     patch<ManagedUser>(`/admin/users/${id}`, b),
   resetPassword: (id: string, password: string) => post<{ ok: boolean }>(`/admin/users/${id}/reset-password`, { password }),

@@ -20,6 +20,23 @@ export interface ManagedUser {
   created_at: string;
 }
 
+export interface ImportResultRow {
+  index: number;
+  email: string;
+  full_name: string;
+  role: string;
+  department: string | null;
+  status: "ok" | "error";
+  error: string | null;
+  password?: string; // only on created rows of a real import, shown once
+}
+
+export interface ImportResult {
+  dry_run: boolean;
+  summary: { total: number; ok: number; errors: number; created: number };
+  rows: ImportResultRow[];
+}
+
 export interface LoginResult {
   access_token: string;
   token_type: string;

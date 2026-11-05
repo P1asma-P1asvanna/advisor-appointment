@@ -126,3 +126,14 @@ def test_token_issued_after_a_moment_is_newer_than_it():
     before = _t.time()
     claims = decode_token(create_token(uuid4(), "student"))
     assert claims["iat"] >= before
+
+
+def test_temp_password_shape_and_cheaper_hash_still_verifies():
+    from app.security import temp_password
+
+    pw = temp_password()
+    assert len(pw) == 14 and pw.count("-") == 2 and pw == pw.lower()
+    assert not set(pw.replace("-", "")) & set("01oli")
+    assert temp_password() != pw
+    h = hash_password(pw, 2**12)
+    assert h.startswith("scrypt$4096$") and verify_password(pw, h) and not verify_password(pw + "x", h)

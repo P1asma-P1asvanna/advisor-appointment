@@ -25,10 +25,22 @@ def _unb64(s: str) -> bytes:
     return base64.b64decode(s.encode("ascii"))
 
 
-def hash_password(password: str) -> str:
+def hash_password(password: str, n: int = _N) -> str:
+    """`n` is the scrypt cost. Bulk imports use a smaller one for their long random temporary passwords, which
+    the person replaces at first sign-in. The cost is stored in the hash, so verify_password needs no change."""
     salt = os.urandom(16)
-    dk = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=_N, r=_R, p=_P, dklen=32)
-    return f"scrypt${_N}${_R}${_P}${_b64(salt)}${_b64(dk)}"
+    dk = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=_R, p=_P, dklen=32)
+    return f"scrypt${n}${_R}${_P}${_b64(salt)}${_b64(dk)}"
+
+
+_TEMP_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o/1/l/i: easy to read out loud and to type
+
+
+def temp_password() -> str:
+    """A random temporary password such as 'k7mq-x2pn-9tfa' (12 characters, about 59 bits)."""
+    import secrets
+
+    return "-".join("".join(secrets.choice(_TEMP_ALPHABET) for _ in range(4)) for _ in range(3))
 
 
 def verify_password(password: str, stored: str) -> bool:

@@ -148,3 +148,22 @@ class ChangePasswordIn(BaseModel):
         if self.new_password == self.current_password:
             raise ValueError("the new password must be different")
         return self
+
+
+Cell = Annotated[str, StringConstraints(max_length=300)]
+
+
+class ImportRowIn(BaseModel):
+    """One line of an uploaded file. Everything is optional text here; the checks happen row by row so one
+    bad line does not reject the whole file."""
+
+    email: Cell = ""
+    full_name: Cell = ""
+    role: Cell = ""
+    department: Cell = ""
+    password: Cell = ""
+
+
+class ImportIn(BaseModel):
+    rows: list[ImportRowIn] = Field(min_length=1, max_length=300)
+    dry_run: bool = True  # check only: nothing is created until the client sends false

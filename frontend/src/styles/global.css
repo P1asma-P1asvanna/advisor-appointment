@@ -154,3 +154,12 @@ th { color: var(--muted); font-weight: 500; font-size: .85rem; } tr:last-child t
 tr.off td { opacity: .55; }
 .filters .tabs { margin-bottom: 0; align-self: end; }
 .usercard .row { margin-top: .5rem; }
+
+/* import */
+.modal.wide { width: min(920px, 100%); }
+.drop { display: flex; flex-direction: column; gap: .5rem; align-items: flex-start; }
+.import-table { max-height: 46vh; overflow: auto; }
+.import-table td, .import-table th { font-size: .88rem; }
+tr.bad td { background: var(--red-bg); }
+.summary { display: flex; gap: .5rem; flex-wrap: wrap; margin: .75rem 0; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }

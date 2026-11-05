@@ -227,3 +227,89 @@ def test_bootstrap_does_nothing_without_settings(client, monkeypatch):
         conn.execute("DELETE FROM users WHERE role = 'admin'")
         assert bootstrap.ensure_admin(conn) is False
         assert conn.execute("SELECT count(*) AS n FROM users WHERE role = 'admin'").fetchone()["n"] == 0
+
+
+# ------------------------------------------------------------ bulk import
+
+IMPORT = f"{ADMIN}/import"
+
+
+def rows_payload(*rows, dry_run=None):
+    body = {"rows": [dict(r) for r in rows]}
+    if dry_run is not None:
+        body["dry_run"] = dry_run
+    return body
+
+
+S1 = {"email": "s1@example.edu", "full_name": "นักศึกษา หนึ่ง", "department": "วิศวกรรมคอมพิวเตอร์"}
+S2 = {"email": "S2@Example.EDU", "full_name": "นักศึกษา สอง", "department": "คณิตศาสตร์", "role": "นักศึกษา"}
+A1 = {"email": "a1@example.edu", "full_name": "อ.ใหม่ ใจดี", "department": "คณิตศาสตร์", "role": "อาจารย์"}
+
+
+def test_import_preview_creates_nothing(client, mali):
+    r = client.post(IMPORT, headers=mali, json=rows_payload(S1, S2, A1))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["dry_run"] is True and body["summary"] == {"total": 3, "ok": 3, "errors": 0, "created": 0}
+    assert [x["role"] for x in body["rows"]] == ["student", "student", "advisor"]   # blank and Thai role words understood
+    assert body["rows"][1]["email"] == "s2@example.edu"                              # normalised
+    assert all("password" not in x for x in body["rows"])
+    assert len(client.get(ADMIN, headers=mali).json()["items"]) == 5
+
+
+def test_import_creates_accounts_with_one_time_passwords(client, mali):
+    r = client.post(IMPORT, headers=mali, json=rows_payload(S1, A1, {**S2, "password": "chosen-pass-1"}, dry_run=False))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["summary"] == {"total": 3, "ok": 3, "errors": 0, "created": 3}
+    pw = {x["email"]: x["password"] for x in body["rows"]}
+    assert pw["s2@example.edu"] == "chosen-pass-1"                  # a given password is used
+    assert len(pw["s1@example.edu"]) == 14 and pw["s1@example.edu"].count("-") == 2   # others are generated
+
+    for email, role in (("s1@example.edu", "student"), ("a1@example.edu", "advisor")):
+        s = login(client, email, pw[email], role=role)
+        assert s.status_code == 200 and s.json()["user"]["must_change_password"] is True
+    assert len(client.get(ADMIN, headers=mali).json()["items"]) == 8
+    # nobody can read the passwords back later
+    listing = client.get(ADMIN, headers=mali).json()["items"]
+    assert all("password" not in u and "password_hash" not in u for u in listing)
+    assert not any(p in str(listing) for p in pw.values())
+
+
+def test_import_reports_bad_rows_and_still_creates_the_good_ones(client, mali):
+    bad = [
+        {"email": "no-at-sign", "full_name": "x", "department": "d"},
+        {"email": "noname@example.edu", "full_name": " ", "department": "d"},
+        {"email": "nodept@example.edu", "full_name": "x", "role": "advisor"},
+        {"email": "badrole@example.edu", "full_name": "x", "department": "d", "role": "นักบิน"},
+        {"email": "short@example.edu", "full_name": "x", "department": "d", "password": "abc"},
+        {"email": "THANA@example.edu", "full_name": "ซ้ำกับที่มีอยู่", "department": "d"},
+        {"email": "dup@example.edu", "full_name": "คนแรก", "department": "d"},
+        {"email": "Dup@example.edu", "full_name": "ซ้ำในไฟล์", "department": "d"},
+    ]
+    r = client.post(IMPORT, headers=mali, json=rows_payload(S1, *bad, dry_run=False))
+    body = r.json()
+    assert body["summary"] == {"total": 9, "ok": 2, "errors": 7, "created": 2}      # s1 and the first dup@
+    errors = {x["index"]: x["error"] for x in body["rows"] if x["status"] == "error"}
+    assert errors[1] == "อีเมลไม่ถูกต้อง"
+    assert errors[2] == "ต้องมีชื่อ-นามสกุล"
+    assert errors[3] == "ต้องมีภาควิชา (นักศึกษาและอาจารย์)"
+    assert errors[4].startswith("บทบาทต้องเป็น")
+    assert errors[5] == "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"
+    assert errors[6] == "มีบัญชีอีเมลนี้อยู่แล้ว"
+    assert errors[8] == "อีเมลซ้ำกับแถวที่ 8 ในไฟล์"
+    assert 7 not in errors
+    created = [u["email"] for u in client.get(ADMIN, headers=mali).json()["items"]]
+    assert "s1@example.edu" in created and "dup@example.edu" in created and len(created) == 7
+
+    again = client.post(IMPORT, headers=mali, json=rows_payload(S1, dry_run=False)).json()   # the same file twice
+    assert again["summary"]["created"] == 0 and again["rows"][0]["error"] == "มีบัญชีอีเมลนี้อยู่แล้ว"
+
+
+def test_import_limits_and_permissions(client, mali, thana, sureeporn):
+    assert client.post(IMPORT, headers=mali, json={"rows": []}).status_code == 422
+    too_many = [{"email": f"u{i}@example.edu", "full_name": "x", "department": "d"} for i in range(301)]
+    assert client.post(IMPORT, headers=mali, json={"rows": too_many}).status_code == 422
+    for h in (thana, sureeporn):
+        assert client.post(IMPORT, headers=h, json=rows_payload(S1)).status_code == 403
+    assert client.post(IMPORT, json=rows_payload(S1)).status_code == 401

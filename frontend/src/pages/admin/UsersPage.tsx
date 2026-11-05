@@ -5,6 +5,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { Badge, Empty, ErrorBox, Loading, Modal, PageHeader, Tabs } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 import { useLoad } from "../../lib/hooks";
+import ImportUsersModal from "./ImportUsersModal";
 import { ROLE_TH } from "../../lib/labels";
 
 const ROLES: Role[] = ["student", "advisor", "admin"];
@@ -24,6 +25,7 @@ export default function UsersPage() {
   const [role, setRole] = useState<Role | "all">("all");
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [resetting, setResetting] = useState<ManagedUser | null>(null);
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
   const list = useLoad(() => api.users({ role: role === "all" ? undefined : role, q: q.trim() || undefined }), [role, q]);
@@ -44,7 +46,7 @@ export default function UsersPage() {
   return (
     <>
       <PageHeader title="จัดการผู้ใช้" sub="เพิ่มบัญชี ปิดบัญชี และรีเซ็ตรหัสผ่าน (ไม่มีการลบ เพื่อให้ประวัติการนัดยังอยู่)"
-        actions={<button className="btn primary" onClick={() => setAdding(true)}>+ เพิ่มผู้ใช้</button>} />
+        actions={<><button className="btn" onClick={() => setImporting(true)}>นำเข้าจาก CSV</button><button className="btn primary" onClick={() => setAdding(true)}>+ เพิ่มผู้ใช้</button></>} />
       <div className="filters">
         <Tabs<Role | "all"> value={role} onChange={setRole} items={[["all", "ทั้งหมด"], ["student", "นักศึกษา"], ["advisor", "อาจารย์"], ["admin", "เจ้าหน้าที่"]]} />
         <label className="field inline grow"><span>ค้นหาชื่อหรืออีเมล</span>
@@ -82,6 +84,7 @@ export default function UsersPage() {
           </table>
         </div>}
 
+      {importing && <ImportUsersModal onClose={() => setImporting(false)} onDone={list.reload} />}
       {adding && <AddUserModal onClose={() => setAdding(false)} onCreated={(email, password) => { setAdding(false); setCreated({ email, password }); list.reload(); }} />}
       {resetting && <ResetModal user={resetting} onClose={() => setResetting(null)} onDone={(email, password) => { setResetting(null); setCreated({ email, password }); list.reload(); }} />}
       {created && (
