@@ -3,6 +3,7 @@ import { api } from "../../api/endpoints";
 import type { ManagedUser, Role } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { Badge, Empty, ErrorBox, Loading, Modal, PageHeader, Tabs } from "../../components/ui";
+import DepartmentSelect from "../../components/DepartmentSelect";
 import { useToast } from "../../components/Toast";
 import { useLoad } from "../../lib/hooks";
 import { ROLE_TH } from "../../lib/labels";
@@ -135,7 +136,7 @@ function AddUserModal({ onClose, onCreated }: { onClose(): void; onCreated(email
         </label>
         <label className="field"><span>ชื่อ-นามสกุล</span><input required value={name} onChange={(e) => setName(e.target.value)} placeholder={role === "advisor" ? "เช่น อ.สมชาย ใจดี" : "เช่น สมหญิง ศรีสุข"} /></label>
         <label className="field"><span>อีเมล (ใช้ล็อกอิน)</span><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-        <label className="field"><span>ภาควิชา{role === "admin" ? " (ไม่บังคับ)" : ""}</span><input required={role !== "admin"} value={dept} onChange={(e) => setDept(e.target.value)} placeholder="เช่น วิศวกรรมคอมพิวเตอร์" /></label>
+        <label className="field"><span>ภาควิชา{role === "admin" ? " (ไม่บังคับ)" : ""}</span><DepartmentSelect required={role !== "admin"} value={dept} onChange={setDept} /></label>
         <label className="field"><span>รหัสผ่านชั่วคราว</span>
           <div className="row">
             <input required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -231,10 +232,10 @@ function EditUserModal({ user, isSelf, onClose, onDone }: { user: ManagedUser; i
           <select disabled={isSelf} value={role} onChange={(e) => setRole(e.target.value as Role)}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_TH[r]}</option>)}</select>
         </label>
         <label className="field"><span>ภาควิชา{role === "admin" ? " (ไม่บังคับ)" : ""}</span>
-          <input required={role !== "admin"} value={dept} onChange={(e) => setDept(e.target.value)} />
+          <DepartmentSelect required={role !== "admin"} value={dept} onChange={setDept} />
         </label>
         {isSelf && <p className="muted">อีเมลและบทบาทของตัวเองแก้ไม่ได้ ให้เจ้าหน้าที่คนอื่นแก้ให้</p>}
-        {!isSelf && <p className="muted">เปลี่ยนบทบาทได้ต่อเมื่อไม่มีนัดหรือช่องเวลาว่างค้างอยู่ ภาควิชาต้องสะกดให้ตรงกันเพราะใช้กรองในหน้าจองนัด</p>}
+        {!isSelf && <p className="muted">เปลี่ยนบทบาทได้ต่อเมื่อไม่มีนัดหรือช่องเวลาว่างค้างอยู่</p>}
         <div className="row end">
           <button type="button" className="btn" onClick={onClose}>ยกเลิก</button>
           <button className="btn primary" disabled={busy}>บันทึก</button>

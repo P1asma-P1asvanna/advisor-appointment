@@ -4,6 +4,7 @@ import json
 
 from .. import audit
 from ..db import get_conn, many, one
+from ..departments import DEPARTMENT_GROUPS
 from ..deps import current_user, require_roles
 from ..schemas import PolicyIn
 
@@ -12,6 +13,12 @@ router = APIRouter(tags=["admin"])
 
 def ratio(n: int, d: int) -> float | None:
     return round(n / d, 4) if d else None
+
+
+@router.get("/departments")
+def departments(user=Depends(current_user)):
+    """The pick-list for the department field, grouped by faculty."""
+    return {"groups": [{"faculty": f, "departments": names} for f, names in DEPARTMENT_GROUPS]}
 
 
 @router.get("/policy")

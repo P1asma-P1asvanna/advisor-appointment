@@ -388,3 +388,28 @@ def test_only_admins_read_the_audit_trail(client, thana, sureeporn):
     assert client.get(f"{API}/admin/audit", headers=thana).status_code == 403
     assert client.get(f"{API}/admin/audit", headers=sureeporn).status_code == 403
     assert client.get(f"{API}/admin/audit").status_code == 401
+
+
+# ------------------------------------------------------------ department pick-list
+
+def test_department_list_and_validation(client, mali, thana):
+    groups = client.get(f"{API}/departments", headers=thana).json()["groups"]
+    names = [d for g in groups for d in g["departments"]]
+    assert "วิศวกรรมคอมพิวเตอร์" in names and "คณิตศาสตร์" in names and "สำนักงานคณะ" in names
+    assert len(names) == len(set(names)) and client.get(f"{API}/departments").status_code == 401
+    bad = new_user(client, mali, email="free.text@example.edu", department="ภาควิชาที่พิมพ์เอง")
+    assert bad.status_code == 422 and code(bad) == "invalid_department"
+    assert new_user(client, mali, email="listed@example.edu", department="สถิติ").status_code == 201
+    uid = user_id(client, mali, "listed@example.edu")
+    r = client.patch(f"{ADMIN}/{uid}", headers=mali, json={"department": "พิมพ์เอง"})
+    assert r.status_code == 422 and code(r) == "invalid_department"
+    assert client.patch(f"{ADMIN}/{uid}", headers=mali, json={"department": "ฟิสิกส์"}).json()["department"] == "ฟิสิกส์"
+
+
+def test_a_department_no_longer_in_the_list_still_works_when_left_unchanged(client, mali):
+    from tests.conftest import _run_script
+    assert new_user(client, mali, email="legacy@example.edu").status_code == 201
+    _run_script("UPDATE users SET department = 'ชื่อเก่าที่เลิกใช้' WHERE email = 'legacy@example.edu'")
+    uid = user_id(client, mali, "legacy@example.edu")
+    ok = client.patch(f"{ADMIN}/{uid}", headers=mali, json={"full_name": "แก้ชื่ออย่างเดียว", "department": "ชื่อเก่าที่เลิกใช้"})
+    assert ok.status_code == 200 and ok.json()["department"] == "ชื่อเก่าที่เลิกใช้"

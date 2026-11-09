@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 
 from .. import audit, throttle
+from ..departments import ALL_DEPARTMENTS
 from ..db import get_conn, many, one, run
 from ..deps import require_roles
 from ..errors import ApiError
@@ -43,9 +44,15 @@ def list_users(
     return {"items": rows}
 
 
+def _check_department(department: str | None) -> None:
+    if department is not None and department not in ALL_DEPARTMENTS:
+        raise ApiError(422, "invalid_department", "เลือกภาควิชาจากรายการที่ให้เท่านั้น")
+
+
 @router.post("", status_code=201)
 def create_user(body: UserIn, user=Depends(require_roles("admin")), conn=Depends(get_conn)):
     """Create an account with a temporary password. The person must choose their own at first sign-in."""
+    _check_department(body.department)
     with conn.transaction():
         created = one(
             conn,
@@ -84,6 +91,8 @@ def update_user(user_id: UUID, body: UserPatch, me=Depends(require_roles("admin"
     department = body.department
     if department is not None:
         department = department.strip() or None
+        if department != target["department"]:  # a value the person already has stays valid even if the list changes
+            _check_department(department)
     new_role = body.role or target["role"]
     new_dept = department if body.department is not None else target["department"]
     if new_role in ("student", "advisor") and not new_dept:

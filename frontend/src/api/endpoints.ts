@@ -8,6 +8,7 @@ export const api = {
   login: (email: string, password: string, role?: Role) => post<LoginResult>("/auth/login", { email, password, role }),
   me: () => get<User>("/me"),
   updateMe: (full_name: string) => patch<User>("/me", { full_name }),
+  departments: () => get<{ groups: { faculty: string; departments: string[] }[] }>("/departments"),
   features: () => get<{ password_reset: boolean }>("/auth/features"),
   forgotPassword: (email: string) => post<{ ok: boolean }>("/auth/forgot-password", { email }),
   resetPassword: (token: string, new_password: string) => post<{ ok: boolean }>("/auth/reset-password", { token, new_password }),
